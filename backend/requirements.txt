@@ -1,0 +1,7 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+simplemma==0.9.1
+python-multipart==0.0.9
+openpyxl==3.1.5
+python-docx==1.1.2
+pypdf==4.3.1

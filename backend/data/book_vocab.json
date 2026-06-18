@@ -1,0 +1,639 @@
+[
+  {
+    "lemma": "ability",
+    "unit": "Unit 3",
+    "page": 23,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "affect",
+    "unit": "Unit 2",
+    "page": 8,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "although",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "low",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "animal",
+    "unit": "Unit 3",
+    "page": 28,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "answer",
+    "unit": "Unit 1",
+    "page": 6,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "art",
+    "unit": "Unit 2",
+    "page": 18,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "because",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "biodiversity",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "low",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "book",
+    "unit": "Unit 1",
+    "page": 1,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "challenge",
+    "unit": "Unit 2",
+    "page": 13,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "change",
+    "unit": "Unit 2",
+    "page": 8,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "city",
+    "unit": "Unit 2",
+    "page": 12,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "class",
+    "unit": "Unit 1",
+    "page": 3,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "climate",
+    "unit": "Unit 3",
+    "page": 30,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "coastal",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "low",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "community",
+    "unit": "Unit 3",
+    "page": 27,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "computer",
+    "unit": "Unit 2",
+    "page": 15,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "cooperate",
+    "unit": "Unit 3",
+    "page": 30,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "country",
+    "unit": "Unit 2",
+    "page": 16,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "culture",
+    "unit": "Unit 2",
+    "page": 17,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "decide",
+    "unit": "Unit 3",
+    "page": 25,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "develop",
+    "unit": "Unit 2",
+    "page": 14,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "development",
+    "unit": "Unit 2",
+    "page": 14,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "dream",
+    "unit": "Unit 3",
+    "page": 25,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "ecosystem",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "energy",
+    "unit": "Unit 2",
+    "page": 11,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "english",
+    "unit": "Unit 1",
+    "page": 5,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "environment",
+    "unit": "Unit 2",
+    "page": 9,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "example",
+    "unit": "Unit 1",
+    "page": 6,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "exercise",
+    "unit": "Unit 3",
+    "page": 19,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "experience",
+    "unit": "Unit 3",
+    "page": 22,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "food",
+    "unit": "Unit 3",
+    "page": 20,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "future",
+    "unit": "Unit 2",
+    "page": 14,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "global",
+    "unit": "Unit 3",
+    "page": 30,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "government",
+    "unit": "Unit 2",
+    "page": 10,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "habitat",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "health",
+    "unit": "Unit 3",
+    "page": 19,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "healthy",
+    "unit": "Unit 3",
+    "page": 19,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "history",
+    "unit": "Unit 2",
+    "page": 16,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "hope",
+    "unit": "Unit 3",
+    "page": 25,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "however",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "important",
+    "unit": "Unit 1",
+    "page": 7,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "improve",
+    "unit": "Unit 3",
+    "page": 23,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "internet",
+    "unit": "Unit 2",
+    "page": 15,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "language",
+    "unit": "Unit 1",
+    "page": 5,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "learn",
+    "unit": "Unit 1",
+    "page": 4,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "lesson",
+    "unit": "Unit 1",
+    "page": 4,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "mean",
+    "unit": "Unit 1",
+    "page": 5,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "modern",
+    "unit": "Unit 2",
+    "page": 17,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "music",
+    "unit": "Unit 2",
+    "page": 18,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "nature",
+    "unit": "Unit 3",
+    "page": 28,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "observation",
+    "unit": "Unit 3",
+    "page": 30,
+    "frequency": "low",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "people",
+    "unit": "Unit 2",
+    "page": 12,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "plan",
+    "unit": "Unit 3",
+    "page": 24,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "plant",
+    "unit": "Unit 3",
+    "page": 28,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "pollution",
+    "unit": "Unit 2",
+    "page": 10,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "population",
+    "unit": "Unit 2",
+    "page": 12,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "practice",
+    "unit": "Unit 3",
+    "page": 23,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "problem",
+    "unit": "Unit 2",
+    "page": 13,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "protect",
+    "unit": "Unit 2",
+    "page": 9,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "question",
+    "unit": "Unit 1",
+    "page": 6,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "read",
+    "unit": "Unit 1",
+    "page": 2,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "reason",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "reduce",
+    "unit": "Unit 2",
+    "page": 10,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "remember",
+    "unit": "Unit 3",
+    "page": 22,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "renewable",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "result",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "school",
+    "unit": "Unit 1",
+    "page": 3,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "science",
+    "unit": "Unit 2",
+    "page": 11,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "scientist",
+    "unit": "Unit 2",
+    "page": 11,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "service",
+    "unit": "Unit 3",
+    "page": 27,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "sleep",
+    "unit": "Unit 3",
+    "page": 20,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "society",
+    "unit": "Unit 3",
+    "page": 27,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "solution",
+    "unit": "Unit 2",
+    "page": 13,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "species",
+    "unit": "Unit 3",
+    "page": 29,
+    "frequency": "high",
+    "in_syllabus": false
+  },
+  {
+    "lemma": "student",
+    "unit": "Unit 1",
+    "page": 1,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "study",
+    "unit": "Unit 1",
+    "page": 4,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "success",
+    "unit": "Unit 3",
+    "page": 24,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "successful",
+    "unit": "Unit 3",
+    "page": 24,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "teacher",
+    "unit": "Unit 1",
+    "page": 3,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "technology",
+    "unit": "Unit 2",
+    "page": 15,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "therefore",
+    "unit": "Unit 3",
+    "page": 26,
+    "frequency": "low",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "traditional",
+    "unit": "Unit 2",
+    "page": 17,
+    "frequency": "low",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "travel",
+    "unit": "Unit 3",
+    "page": 21,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "trip",
+    "unit": "Unit 3",
+    "page": 21,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "understand",
+    "unit": "Unit 3",
+    "page": 22,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "visit",
+    "unit": "Unit 3",
+    "page": 21,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "water",
+    "unit": "Unit 3",
+    "page": 20,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "word",
+    "unit": "Unit 1",
+    "page": 5,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "world",
+    "unit": "Unit 2",
+    "page": 16,
+    "frequency": "high",
+    "in_syllabus": true
+  },
+  {
+    "lemma": "write",
+    "unit": "Unit 1",
+    "page": 2,
+    "frequency": "high",
+    "in_syllabus": true
+  }
+]

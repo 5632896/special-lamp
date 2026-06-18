@@ -1,0 +1,1488 @@
+[
+  {
+    "id": "legacy_book_vocab",
+    "name": "旧主词库 book_vocab",
+    "type": "main",
+    "createdAt": "2026-06-17T08:29:22.552195+00:00",
+    "entries": [
+      {
+        "lemma": "ability",
+        "unit": "Unit 3",
+        "page": 23,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 0
+      },
+      {
+        "lemma": "affect",
+        "unit": "Unit 2",
+        "page": 8,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 1
+      },
+      {
+        "lemma": "although",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "low",
+        "in_syllabus": true,
+        "order": 2
+      },
+      {
+        "lemma": "animal",
+        "unit": "Unit 3",
+        "page": 28,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 3
+      },
+      {
+        "lemma": "answer",
+        "unit": "Unit 1",
+        "page": 6,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 4
+      },
+      {
+        "lemma": "art",
+        "unit": "Unit 2",
+        "page": 18,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 5
+      },
+      {
+        "lemma": "because",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 6
+      },
+      {
+        "lemma": "biodiversity",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 7
+      },
+      {
+        "lemma": "book",
+        "unit": "Unit 1",
+        "page": 1,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 8
+      },
+      {
+        "lemma": "challenge",
+        "unit": "Unit 2",
+        "page": 13,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 9
+      },
+      {
+        "lemma": "change",
+        "unit": "Unit 2",
+        "page": 8,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 10
+      },
+      {
+        "lemma": "city",
+        "unit": "Unit 2",
+        "page": 12,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 11
+      },
+      {
+        "lemma": "class",
+        "unit": "Unit 1",
+        "page": 3,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 12
+      },
+      {
+        "lemma": "climate",
+        "unit": "Unit 3",
+        "page": 30,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 13
+      },
+      {
+        "lemma": "coastal",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 14
+      },
+      {
+        "lemma": "community",
+        "unit": "Unit 3",
+        "page": 27,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 15
+      },
+      {
+        "lemma": "computer",
+        "unit": "Unit 2",
+        "page": 15,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 16
+      },
+      {
+        "lemma": "cooperate",
+        "unit": "Unit 3",
+        "page": 30,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 17
+      },
+      {
+        "lemma": "country",
+        "unit": "Unit 2",
+        "page": 16,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 18
+      },
+      {
+        "lemma": "culture",
+        "unit": "Unit 2",
+        "page": 17,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 19
+      },
+      {
+        "lemma": "decide",
+        "unit": "Unit 3",
+        "page": 25,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 20
+      },
+      {
+        "lemma": "develop",
+        "unit": "Unit 2",
+        "page": 14,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 21
+      },
+      {
+        "lemma": "development",
+        "unit": "Unit 2",
+        "page": 14,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 22
+      },
+      {
+        "lemma": "dream",
+        "unit": "Unit 3",
+        "page": 25,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 23
+      },
+      {
+        "lemma": "ecosystem",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 24
+      },
+      {
+        "lemma": "energy",
+        "unit": "Unit 2",
+        "page": 11,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 25
+      },
+      {
+        "lemma": "english",
+        "unit": "Unit 1",
+        "page": 5,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 26
+      },
+      {
+        "lemma": "environment",
+        "unit": "Unit 2",
+        "page": 9,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 27
+      },
+      {
+        "lemma": "example",
+        "unit": "Unit 1",
+        "page": 6,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 28
+      },
+      {
+        "lemma": "exercise",
+        "unit": "Unit 3",
+        "page": 19,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 29
+      },
+      {
+        "lemma": "experience",
+        "unit": "Unit 3",
+        "page": 22,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 30
+      },
+      {
+        "lemma": "food",
+        "unit": "Unit 3",
+        "page": 20,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 31
+      },
+      {
+        "lemma": "future",
+        "unit": "Unit 2",
+        "page": 14,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 32
+      },
+      {
+        "lemma": "global",
+        "unit": "Unit 3",
+        "page": 30,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 33
+      },
+      {
+        "lemma": "government",
+        "unit": "Unit 2",
+        "page": 10,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 34
+      },
+      {
+        "lemma": "habitat",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 35
+      },
+      {
+        "lemma": "health",
+        "unit": "Unit 3",
+        "page": 19,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 36
+      },
+      {
+        "lemma": "healthy",
+        "unit": "Unit 3",
+        "page": 19,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 37
+      },
+      {
+        "lemma": "history",
+        "unit": "Unit 2",
+        "page": 16,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 38
+      },
+      {
+        "lemma": "hope",
+        "unit": "Unit 3",
+        "page": 25,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 39
+      },
+      {
+        "lemma": "however",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 40
+      },
+      {
+        "lemma": "important",
+        "unit": "Unit 1",
+        "page": 7,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 41
+      },
+      {
+        "lemma": "improve",
+        "unit": "Unit 3",
+        "page": 23,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 42
+      },
+      {
+        "lemma": "internet",
+        "unit": "Unit 2",
+        "page": 15,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 43
+      },
+      {
+        "lemma": "language",
+        "unit": "Unit 1",
+        "page": 5,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 44
+      },
+      {
+        "lemma": "learn",
+        "unit": "Unit 1",
+        "page": 4,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 45
+      },
+      {
+        "lemma": "lesson",
+        "unit": "Unit 1",
+        "page": 4,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 46
+      },
+      {
+        "lemma": "mean",
+        "unit": "Unit 1",
+        "page": 5,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 47
+      },
+      {
+        "lemma": "modern",
+        "unit": "Unit 2",
+        "page": 17,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 48
+      },
+      {
+        "lemma": "music",
+        "unit": "Unit 2",
+        "page": 18,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 49
+      },
+      {
+        "lemma": "nature",
+        "unit": "Unit 3",
+        "page": 28,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 50
+      },
+      {
+        "lemma": "observation",
+        "unit": "Unit 3",
+        "page": 30,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 51
+      },
+      {
+        "lemma": "people",
+        "unit": "Unit 2",
+        "page": 12,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 52
+      },
+      {
+        "lemma": "plan",
+        "unit": "Unit 3",
+        "page": 24,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 53
+      },
+      {
+        "lemma": "plant",
+        "unit": "Unit 3",
+        "page": 28,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 54
+      },
+      {
+        "lemma": "pollution",
+        "unit": "Unit 2",
+        "page": 10,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 55
+      },
+      {
+        "lemma": "population",
+        "unit": "Unit 2",
+        "page": 12,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 56
+      },
+      {
+        "lemma": "practice",
+        "unit": "Unit 3",
+        "page": 23,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 57
+      },
+      {
+        "lemma": "problem",
+        "unit": "Unit 2",
+        "page": 13,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 58
+      },
+      {
+        "lemma": "protect",
+        "unit": "Unit 2",
+        "page": 9,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 59
+      },
+      {
+        "lemma": "question",
+        "unit": "Unit 1",
+        "page": 6,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 60
+      },
+      {
+        "lemma": "read",
+        "unit": "Unit 1",
+        "page": 2,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 61
+      },
+      {
+        "lemma": "reason",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 62
+      },
+      {
+        "lemma": "reduce",
+        "unit": "Unit 2",
+        "page": 10,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 63
+      },
+      {
+        "lemma": "remember",
+        "unit": "Unit 3",
+        "page": 22,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 64
+      },
+      {
+        "lemma": "renewable",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 65
+      },
+      {
+        "lemma": "result",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 66
+      },
+      {
+        "lemma": "school",
+        "unit": "Unit 1",
+        "page": 3,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 67
+      },
+      {
+        "lemma": "science",
+        "unit": "Unit 2",
+        "page": 11,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 68
+      },
+      {
+        "lemma": "scientist",
+        "unit": "Unit 2",
+        "page": 11,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 69
+      },
+      {
+        "lemma": "service",
+        "unit": "Unit 3",
+        "page": 27,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 70
+      },
+      {
+        "lemma": "sleep",
+        "unit": "Unit 3",
+        "page": 20,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 71
+      },
+      {
+        "lemma": "society",
+        "unit": "Unit 3",
+        "page": 27,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 72
+      },
+      {
+        "lemma": "solution",
+        "unit": "Unit 2",
+        "page": 13,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 73
+      },
+      {
+        "lemma": "species",
+        "unit": "Unit 3",
+        "page": 29,
+        "frequency": "high",
+        "in_syllabus": false,
+        "order": 74
+      },
+      {
+        "lemma": "student",
+        "unit": "Unit 1",
+        "page": 1,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 75
+      },
+      {
+        "lemma": "study",
+        "unit": "Unit 1",
+        "page": 4,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 76
+      },
+      {
+        "lemma": "success",
+        "unit": "Unit 3",
+        "page": 24,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 77
+      },
+      {
+        "lemma": "successful",
+        "unit": "Unit 3",
+        "page": 24,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 78
+      },
+      {
+        "lemma": "teacher",
+        "unit": "Unit 1",
+        "page": 3,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 79
+      },
+      {
+        "lemma": "technology",
+        "unit": "Unit 2",
+        "page": 15,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 80
+      },
+      {
+        "lemma": "therefore",
+        "unit": "Unit 3",
+        "page": 26,
+        "frequency": "low",
+        "in_syllabus": true,
+        "order": 81
+      },
+      {
+        "lemma": "traditional",
+        "unit": "Unit 2",
+        "page": 17,
+        "frequency": "low",
+        "in_syllabus": true,
+        "order": 82
+      },
+      {
+        "lemma": "travel",
+        "unit": "Unit 3",
+        "page": 21,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 83
+      },
+      {
+        "lemma": "trip",
+        "unit": "Unit 3",
+        "page": 21,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 84
+      },
+      {
+        "lemma": "understand",
+        "unit": "Unit 3",
+        "page": 22,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 85
+      },
+      {
+        "lemma": "visit",
+        "unit": "Unit 3",
+        "page": 21,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 86
+      },
+      {
+        "lemma": "water",
+        "unit": "Unit 3",
+        "page": 20,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 87
+      },
+      {
+        "lemma": "word",
+        "unit": "Unit 1",
+        "page": 5,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 88
+      },
+      {
+        "lemma": "world",
+        "unit": "Unit 2",
+        "page": 16,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 89
+      },
+      {
+        "lemma": "write",
+        "unit": "Unit 1",
+        "page": 2,
+        "frequency": "high",
+        "in_syllabus": true,
+        "order": 90
+      }
+    ]
+  },
+  {
+    "id": "extra",
+    "name": "补充词库",
+    "type": "extra",
+    "createdAt": "2026-06-17T08:29:22.554281+00:00",
+    "entries": [
+      {
+        "lemma": "a",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 0
+      },
+      {
+        "lemma": "and",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 1
+      },
+      {
+        "lemma": "be",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 2
+      },
+      {
+        "lemma": "can",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 3
+      },
+      {
+        "lemma": "discuss",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 4
+      },
+      {
+        "lemma": "explore",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 5
+      },
+      {
+        "lemma": "how",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 6
+      },
+      {
+        "lemma": "more",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 7
+      },
+      {
+        "lemma": "of",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 8
+      },
+      {
+        "lemma": "so",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 9
+      },
+      {
+        "lemma": "survive",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 10
+      },
+      {
+        "lemma": "the",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 11
+      },
+      {
+        "lemma": "will",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "order": 12
+      },
+      {
+        "lemma": "all",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": null,
+        "order": 13
+      },
+      {
+        "lemma": "if",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": null,
+        "order": 14
+      },
+      {
+        "lemma": "nothing",
+        "unit": "Supplement",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": null,
+        "order": 15
+      }
+    ]
+  },
+  {
+    "id": "basic_whitelist",
+    "name": "基础词白名单",
+    "type": "basic",
+    "createdAt": "2026-06-17T14:12:20.459451+00:00",
+    "entries": [
+      {
+        "lemma": "a",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 0
+      },
+      {
+        "lemma": "about",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 1
+      },
+      {
+        "lemma": "after",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 2
+      },
+      {
+        "lemma": "am",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 3
+      },
+      {
+        "lemma": "an",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 4
+      },
+      {
+        "lemma": "and",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 5
+      },
+      {
+        "lemma": "are",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 6
+      },
+      {
+        "lemma": "as",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 7
+      },
+      {
+        "lemma": "at",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 8
+      },
+      {
+        "lemma": "be",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 9
+      },
+      {
+        "lemma": "because",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 10
+      },
+      {
+        "lemma": "been",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 11
+      },
+      {
+        "lemma": "before",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 12
+      },
+      {
+        "lemma": "being",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 13
+      },
+      {
+        "lemma": "but",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 14
+      },
+      {
+        "lemma": "by",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 15
+      },
+      {
+        "lemma": "can",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 16
+      },
+      {
+        "lemma": "could",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 17
+      },
+      {
+        "lemma": "did",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 18
+      },
+      {
+        "lemma": "do",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 19
+      },
+      {
+        "lemma": "does",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 20
+      },
+      {
+        "lemma": "for",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 21
+      },
+      {
+        "lemma": "from",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 22
+      },
+      {
+        "lemma": "had",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 23
+      },
+      {
+        "lemma": "has",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 24
+      },
+      {
+        "lemma": "have",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 25
+      },
+      {
+        "lemma": "he",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 26
+      },
+      {
+        "lemma": "her",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 27
+      },
+      {
+        "lemma": "him",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 28
+      },
+      {
+        "lemma": "his",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 29
+      },
+      {
+        "lemma": "i",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 30
+      },
+      {
+        "lemma": "in",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 31
+      },
+      {
+        "lemma": "into",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 32
+      },
+      {
+        "lemma": "is",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 33
+      },
+      {
+        "lemma": "it",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 34
+      },
+      {
+        "lemma": "its",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 35
+      },
+      {
+        "lemma": "may",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 36
+      },
+      {
+        "lemma": "me",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 37
+      },
+      {
+        "lemma": "might",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 38
+      },
+      {
+        "lemma": "must",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 39
+      },
+      {
+        "lemma": "my",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 40
+      },
+      {
+        "lemma": "no",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 41
+      },
+      {
+        "lemma": "not",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 42
+      },
+      {
+        "lemma": "of",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 43
+      },
+      {
+        "lemma": "on",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 44
+      },
+      {
+        "lemma": "or",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 45
+      },
+      {
+        "lemma": "our",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 46
+      },
+      {
+        "lemma": "over",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 47
+      },
+      {
+        "lemma": "shall",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 48
+      },
+      {
+        "lemma": "she",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 49
+      },
+      {
+        "lemma": "should",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 50
+      },
+      {
+        "lemma": "so",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 51
+      },
+      {
+        "lemma": "the",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 52
+      },
+      {
+        "lemma": "their",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 53
+      },
+      {
+        "lemma": "them",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 54
+      },
+      {
+        "lemma": "they",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 55
+      },
+      {
+        "lemma": "to",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 56
+      },
+      {
+        "lemma": "us",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 57
+      },
+      {
+        "lemma": "was",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 58
+      },
+      {
+        "lemma": "we",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 59
+      },
+      {
+        "lemma": "were",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 60
+      },
+      {
+        "lemma": "will",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 61
+      },
+      {
+        "lemma": "with",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 62
+      },
+      {
+        "lemma": "would",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 63
+      },
+      {
+        "lemma": "yes",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 64
+      },
+      {
+        "lemma": "you",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 65
+      },
+      {
+        "lemma": "your",
+        "unit": "Basic",
+        "page": null,
+        "frequency": "low",
+        "in_syllabus": false,
+        "meaning": "基础功能词",
+        "order": 66
+      }
+    ]
+  }
+]

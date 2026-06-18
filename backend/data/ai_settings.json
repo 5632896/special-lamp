@@ -1,0 +1,10 @@
+{
+  "provider": "OpenAI",
+  "baseUrl": "https://sui-xiang.com",
+  "model": "gpt-5.4-mini",
+  "apiKey": "sk-3a6494f9f1c7ac544b7bc067eafce6969414b20b8c8ebc6f1cd3bc9ec6accf48",
+  "temperature": 1.5,
+  "timeoutSeconds": 50,
+  "verifySSL": false,
+  "allowInsecureSSL": false
+}
