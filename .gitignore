@@ -1,0 +1,26 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# AI configuration and generated cache
+backend/data/ai_settings.json
+backend/data/ai_cache.json
+
+# Local learning data and one-time JSON migration backups
+backend/data/*.sqlite3
+backend/data/book_vocab.json
+backend/data/extra_vocab.json
+backend/data/user_vocab_status.json
+backend/data/vocab_libraries.json
+backend/data/json-backups/
+
+# Python and frontend build artifacts
+backend/.venv/
+__pycache__/
+*.py[cod]
+frontend/node_modules/
+frontend/dist/
+
+# Editor files
+.vscode/launch.json

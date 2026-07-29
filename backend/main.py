@@ -1,25 +1,51 @@
 from __future__ import annotations
 
 import csv
+import copy
 import hashlib
 import io
 import json
+import os
 import re
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
 import simplemma
 from docx import Document
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openpyxl import load_workbook
 from pydantic import BaseModel
 from pypdf import PdfReader
+try:
+    from .storage import (
+        append_chat_message, create_chat_session, delete_chat_session, get_chat_session,
+        clear_review_schedules, get_due_review_schedules, get_review_schedule, initialize as initialize_storage,
+        list_chat_sessions, load_ai_cache as sqlite_load_ai_cache,
+        load_libraries as sqlite_load_libraries, load_setting as sqlite_load_setting,
+        load_user_status as sqlite_load_user_status, migrate_json_once,
+        rename_chat_session, save_review_schedule,
+        save_ai_cache as sqlite_save_ai_cache, save_libraries as sqlite_save_libraries,
+        save_setting as sqlite_save_setting, save_user_status as sqlite_save_user_status,
+    )
+except ImportError:
+    from storage import (
+        append_chat_message, create_chat_session, delete_chat_session, get_chat_session,
+        clear_review_schedules, get_due_review_schedules, get_review_schedule, initialize as initialize_storage,
+        list_chat_sessions, load_ai_cache as sqlite_load_ai_cache,
+        load_libraries as sqlite_load_libraries, load_setting as sqlite_load_setting,
+        load_user_status as sqlite_load_user_status, migrate_json_once,
+        rename_chat_session, save_review_schedule,
+        save_ai_cache as sqlite_save_ai_cache, save_libraries as sqlite_save_libraries,
+        save_setting as sqlite_save_setting, save_user_status as sqlite_save_user_status,
+    )
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -35,6 +61,8 @@ OLD_EXTRA_VOCAB_PATH = DATA_DIR / "extra_vocab.json"
 EXTRA_LIBRARY_ID = "extra"
 BASIC_LIBRARY_ID = "basic_whitelist"
 MAX_ANALYZE_WORDS = 5000
+MAX_IMPORT_ROWS = 300
+MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 SUPPORTED_UPLOAD_EXTENSIONS = {".csv", ".txt", ".xlsx", ".docx", ".pdf"}
 
 MarkState = Literal["known", "fuzzy", "unknown"]
@@ -47,19 +75,22 @@ WORD_COLUMN_ALIASES = {
     "term",
     "vocab",
     "vocabulary",
+    "english",
+    "english_word",
+    "english_words",
     "单词",
     "词",
     "词汇",
     "词元",
     "原形",
+    "英文",
+    "英语",
 }
 UNIT_COLUMN_ALIASES = {
     "unit",
-    "lesson",
-    "chapter",
     "单元",
-    "章节",
 }
+LESSON_COLUMN_ALIASES = {"lesson", "course", "class", "chapter", "课程", "课", "章节"}
 PAGE_COLUMN_ALIASES = {
     "page",
     "page_no",
@@ -97,6 +128,24 @@ MEANING_COLUMN_ALIASES = {
     "意思",
     "含义",
 }
+POS_COLUMN_ALIASES = {"pos", "part_of_speech", "word_class", "词性"}
+IPA_COLUMN_ALIASES = {"ipa", "phonetic", "phonetics", "pronunciation", "音标", "发音"}
+AUDIO_URL_COLUMN_ALIASES = {"audio_url", "audio", "audio_url", "sound_url", "音频", "音频链接", "发音链接"}
+SERIAL_COLUMN_ALIASES = {"serial", "serial_no", "serial_number", "no", "number", "index", "序号", "单词序号", "编号"}
+
+IMPORT_MAPPING_FIELDS = (
+    ("lemma", "单词（必填）"),
+    ("meaning", "释义"),
+    ("unit", "单元"),
+    ("lesson", "课程/章节"),
+    ("page", "页码"),
+    ("frequency", "频率"),
+    ("pos", "词性"),
+    ("ipa", "音标"),
+    ("audio_url", "音频链接"),
+    ("serial", "序号"),
+    ("in_syllabus", "是否书内"),
+)
 
 BUILTIN_STOPWORDS = {
     "the", "a", "an", "and", "or", "but", "so", "because",
@@ -251,6 +300,7 @@ class AddExtraWordRequest(BaseModel):
     level: int = 1
     frequency: Literal["high", "low"] = "low"
     meaning: str | None = None
+    libraryId: str | None = None
 
 
 class AddBasicWordsRequest(BaseModel):
@@ -270,6 +320,7 @@ class AISettingsPayload(BaseModel):
 class AIWordQueryRequest(BaseModel):
     word: str
     context: str | None = None
+    libraryContext: dict | None = None
     forceRefresh: bool = False
     settings: AISettingsPayload | None = None
 
@@ -278,6 +329,54 @@ class AIArticleTranslateRequest(BaseModel):
     text: str
     forceRefresh: bool = False
     settings: AISettingsPayload | None = None
+
+
+class ImportConfirmRequest(BaseModel):
+    libraryName: str = ""
+    headers: list[str] = []
+    rows: list[list] = []
+    mapping: dict[str, str] = {}
+    targetType: Literal["main", "basic"] = "main"
+
+
+class AIImportDraftRequest(BaseModel):
+    text: str
+    settings: AISettingsPayload | None = None
+
+
+class ReviewMarkRequest(BaseModel):
+    lemma: str
+    mark: MarkState
+
+
+class BasicWordsDeleteRequest(BaseModel):
+    words: list[str] = []
+
+
+class LibraryCreateRequest(BaseModel):
+    name: str
+
+
+class LibraryRenameRequest(BaseModel):
+    name: str
+
+
+class LibraryMergeRequest(BaseModel):
+    sourceLibraryIds: list[str]
+    name: str
+    deleteSources: bool = False
+
+
+class DefaultExtraLibraryRequest(BaseModel):
+    libraryId: str
+
+
+class ChatSessionCreateRequest(BaseModel):
+    title: str = "新对话"
+
+
+class ChatSessionRenameRequest(BaseModel):
+    title: str
 
 
 def now_iso() -> str:
@@ -289,7 +388,6 @@ def default_ai_settings() -> dict:
         "provider": "openai-compatible",
         "baseUrl": "",
         "model": "",
-        "apiKey": "",
         "temperature": 0.2,
         "timeoutSeconds": 30,
         "verifySSL": True,
@@ -318,6 +416,8 @@ def ensure_data_files() -> None:
         )
 
     migrate_old_vocab_files()
+    initialize_storage()
+    migrate_json_once(default_ai_settings())
 
 
 def ensure_data_files_without_migration() -> None:
@@ -358,47 +458,45 @@ def write_json(path: Path, data) -> None:
 
 def load_libraries() -> list[dict]:
     ensure_data_files_without_migration()
-    data = read_json(LIBRARIES_PATH, [])
-    if isinstance(data, list):
-        return data
-    return []
+    return sqlite_load_libraries()
 
 
 def save_libraries(libraries: list[dict]) -> None:
-    write_json(LIBRARIES_PATH, libraries)
+    sqlite_save_libraries(libraries)
 
 
 def load_user_status() -> dict[str, dict]:
     ensure_data_files_without_migration()
-    data = read_json(USER_STATUS_PATH, {})
-    if isinstance(data, dict):
-        return data
-    return {}
+    return sqlite_load_user_status()
 
 
 def save_user_status(status: dict[str, dict]) -> None:
-    write_json(USER_STATUS_PATH, status)
+    sqlite_save_user_status(status)
 
 
 def load_ai_settings() -> dict:
     ensure_data_files_without_migration()
-    data = read_json(AI_SETTINGS_PATH, default_ai_settings())
+    data = sqlite_load_setting("ai_settings", default_ai_settings())
     if not isinstance(data, dict):
         return default_ai_settings()
     merged = default_ai_settings()
-    merged.update(data)
+    merged.update({key: value for key, value in data.items() if key != "apiKey"})
     return merged
 
 
 def save_ai_settings(settings: dict) -> None:
     merged = default_ai_settings()
-    merged.update(settings)
-    write_json(AI_SETTINGS_PATH, merged)
+    merged.update({key: value for key, value in settings.items() if key != "apiKey"})
+    sqlite_save_setting("ai_settings", merged)
+
+
+def environment_api_key() -> str:
+    return safe_text(os.getenv("AI_API_KEY")) or safe_text(os.getenv("OPENAI_API_KEY")) or ""
 
 
 def load_ai_cache() -> dict:
     ensure_data_files_without_migration()
-    data = read_json(AI_CACHE_PATH, {"word": {}, "article": {}, "chat": {}})
+    data = sqlite_load_ai_cache()
     if not isinstance(data, dict):
         return {"word": {}, "article": {}, "chat": {}}
     if not isinstance(data.get("word"), dict):
@@ -417,7 +515,7 @@ def save_ai_cache(cache: dict) -> None:
         cache["article"] = {}
     if "chat" not in cache or not isinstance(cache["chat"], dict):
         cache["chat"] = {}
-    write_json(AI_CACHE_PATH, cache)
+    sqlite_save_ai_cache(cache)
 
 
 def normalize_header(value) -> str:
@@ -556,14 +654,20 @@ def normalize_entry(entry: dict, order: int, default_unit: str = "Imported") -> 
     if not lemma:
         return None
 
+    locations = entry.get("locations") if isinstance(entry.get("locations"), list) else []
+    if not locations:
+        locations = [{"unit": safe_text(entry.get("unit")) or default_unit, "page": safe_int(entry.get("page"))}]
+
     return {
         "lemma": lemma,
-        "unit": safe_text(entry.get("unit")) or default_unit,
-        "page": safe_int(entry.get("page")),
+        "unit": safe_text(locations[0].get("unit")) or default_unit,
+        "page": safe_int(locations[0].get("page")),
+        "locations": locations,
         "frequency": normalize_frequency(entry.get("frequency")),
         "in_syllabus": bool(entry.get("in_syllabus", True)),
         "meaning": safe_text(entry.get("meaning")),
         "order": int(entry.get("order", order)),
+        "customFields": entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {},
     }
 
 
@@ -574,10 +678,11 @@ def dedupe_entries_keep_first(entries: list[dict]) -> list[dict]:
         normalized = normalize_entry(entry, index)
         if not normalized:
             continue
-        lemma = normalized["lemma"]
-        if lemma in seen:
+        location = normalized["locations"][0]
+        key = (normalized["lemma"], location.get("unit"), location.get("page"))
+        if key in seen:
             continue
-        seen.add(lemma)
+        seen.add(key)
         result.append(normalized)
     return result
 
@@ -684,6 +789,34 @@ def get_extra_library(libraries: list[dict]) -> dict:
     return extra
 
 
+def get_extra_libraries(libraries: list[dict]) -> list[dict]:
+    extras = [library for library in libraries if library.get("type") == "extra"]
+    if extras:
+        return extras
+    return [get_extra_library(libraries)]
+
+
+def get_default_extra_library_id(libraries: list[dict]) -> str:
+    extras = get_extra_libraries(libraries)
+    configured = safe_text(sqlite_load_setting("default_extra_library_id", EXTRA_LIBRARY_ID))
+    if any(library.get("id") == configured for library in extras):
+        return configured
+    fallback = extras[0].get("id", EXTRA_LIBRARY_ID)
+    sqlite_save_setting("default_extra_library_id", fallback)
+    return fallback
+
+
+def get_extra_library_by_id(libraries: list[dict], library_id: str | None = None) -> dict:
+    target_id = safe_text(library_id) or get_default_extra_library_id(libraries)
+    target = next(
+        (library for library in libraries if library.get("id") == target_id and library.get("type") == "extra"),
+        None,
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="补充词库不存在。")
+    return target
+
+
 def get_basic_library(libraries: list[dict]) -> dict:
     for lib in libraries:
         if lib.get("id") == BASIC_LIBRARY_ID:
@@ -781,27 +914,17 @@ def parse_table_rows(headers: list, rows: list[list], default_unit: str = "Impor
     meaning_index = pick_column_index(normalized_headers, MEANING_COLUMN_ALIASES)
 
     if word_index is None:
-        flattened_text = "\n".join(
-            str(cell)
-            for row in [headers] + rows
-            for cell in row
-            if safe_text(cell)
-        )
-        return extract_entries_from_text(flattened_text, default_unit=default_unit)
+        return []
 
     entries = []
-    seen = set()
-
     for row in rows:
         raw_word = safe_text(get_cell(row, word_index))
         if not raw_word:
             continue
 
         lemma = primary_lemma(raw_word)
-        if not lemma or lemma in seen:
+        if not lemma:
             continue
-
-        seen.add(lemma)
 
         if in_syllabus_index is not None:
             in_syllabus = parse_bool(get_cell(row, in_syllabus_index), True)
@@ -809,6 +932,13 @@ def parse_table_rows(headers: list, rows: list[list], default_unit: str = "Impor
             in_syllabus = not parse_bool(get_cell(row, oversyllabus_index), False)
         else:
             in_syllabus = True
+
+        custom_fields = {}
+        standard_indices = {word_index, unit_index, page_index, frequency_index, in_syllabus_index, oversyllabus_index, meaning_index}
+        for index, header in enumerate(headers):
+            value = safe_text(get_cell(row, index))
+            if index not in standard_indices and value:
+                custom_fields[str(header).strip() or f"column_{index + 1}"] = value
 
         entries.append(
             {
@@ -819,6 +949,7 @@ def parse_table_rows(headers: list, rows: list[list], default_unit: str = "Impor
                 "in_syllabus": in_syllabus,
                 "meaning": safe_text(get_cell(row, meaning_index)),
                 "order": len(entries),
+                "customFields": custom_fields,
             }
         )
 
@@ -863,6 +994,83 @@ def parse_xlsx_content(content: bytes) -> list[dict]:
     headers = rows[0]
     data_rows = rows[1:]
     return parse_table_rows(headers, data_rows)
+
+
+def parse_upload_table(filename: str, content: bytes) -> tuple[list[str], list[list]]:
+    suffix = Path(filename).suffix.lower()
+    if suffix in {".csv", ".txt"}:
+        text = decode_text_file(content)
+        sample = "\n".join(text.splitlines()[:10])
+        try:
+            delimiter = csv.Sniffer().sniff(sample, delimiters=",\t;").delimiter
+        except csv.Error:
+            delimiter = ","
+        reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+        rows = [row for row in reader if any(safe_text(cell) for cell in row)]
+        return (list(map(str, rows[0])) if rows else [], rows[1:] if rows else [])
+    if suffix == ".xlsx":
+        workbook = load_workbook(io.BytesIO(content), data_only=True)
+        rows = [list(row) for row in workbook.active.iter_rows(values_only=True) if any(safe_text(cell) for cell in row)]
+        return (list(map(str, rows[0])) if rows else [], rows[1:] if rows else [])
+    entries = parse_uploaded_vocab(filename, content)
+    keys = ["lemma", "unit", "page", "frequency", "in_syllabus", "meaning"]
+    return (keys, [[item.get(key) for key in keys] for item in entries])
+
+
+def infer_import_mapping(headers: list[str]) -> dict[str, str]:
+    aliases = {
+        "lemma": WORD_COLUMN_ALIASES,
+        "meaning": MEANING_COLUMN_ALIASES,
+        "unit": UNIT_COLUMN_ALIASES,
+        "lesson": LESSON_COLUMN_ALIASES,
+        "page": PAGE_COLUMN_ALIASES,
+        "frequency": FREQUENCY_COLUMN_ALIASES,
+        "pos": POS_COLUMN_ALIASES,
+        "ipa": IPA_COLUMN_ALIASES,
+        "audio_url": AUDIO_URL_COLUMN_ALIASES,
+        "serial": SERIAL_COLUMN_ALIASES,
+        "in_syllabus": IN_SYLLABUS_COLUMN_ALIASES,
+    }
+    mapping = {}
+    for field, values in aliases.items():
+        for header in headers:
+            if normalize_header(header) in values:
+                mapping[field] = header
+                break
+    return mapping
+
+
+def entries_from_mapping(headers: list[str], rows: list[list], mapping: dict[str, str]) -> list[dict]:
+    header_map = {str(header): index for index, header in enumerate(headers)}
+    mapped = {field: header_map.get(str(source)) for field, source in mapping.items()}
+    word_index = mapped.get("lemma")
+    if word_index is None:
+        return []
+    entries = []
+    for row in rows:
+        raw_word = safe_text(get_cell(row, word_index))
+        lemma = primary_lemma(raw_word or "")
+        if not lemma:
+            continue
+        known_sources = {index for index in mapped.values() if index is not None}
+        fields = {str(header): safe_text(get_cell(row, index)) for index, header in enumerate(headers) if index not in known_sources and safe_text(get_cell(row, index))}
+        for field in ("lesson", "pos", "ipa", "audio_url", "serial"):
+            value = safe_text(get_cell(row, mapped.get(field)))
+            if value:
+                fields[dict(IMPORT_MAPPING_FIELDS)[field]] = value
+        unit = safe_text(get_cell(row, mapped.get("unit")))
+        lesson = safe_text(get_cell(row, mapped.get("lesson")))
+        entries.append({
+            "lemma": lemma,
+            "unit": unit or lesson or "Imported",
+            "page": safe_int(get_cell(row, mapped.get("page"))),
+            "frequency": normalize_frequency(get_cell(row, mapped.get("frequency"))),
+            "in_syllabus": parse_bool(get_cell(row, mapped.get("in_syllabus")), True),
+            "meaning": safe_text(get_cell(row, mapped.get("meaning"))),
+            "order": len(entries),
+            "customFields": fields,
+        })
+    return entries
 
 
 def parse_uploaded_vocab(filename: str, content: bytes) -> list[dict]:
@@ -953,6 +1161,40 @@ def summarize_library(lib: dict) -> dict:
     }
 
 
+def merge_library_entries(source_libraries: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for library in source_libraries:
+        for source in sorted(library.get("entries", []), key=lambda item: int(item.get("order", 0))):
+            entry = normalize_entry(source, len(merged))
+            if not entry:
+                continue
+            lemma = entry["lemma"]
+            if lemma not in merged:
+                merged[lemma] = copy.deepcopy(entry)
+                continue
+            target = merged[lemma]
+            known_locations = {(item.get("unit"), item.get("page")) for item in target.get("locations", [])}
+            for location in entry.get("locations", []):
+                location_key = (location.get("unit"), location.get("page"))
+                if location_key not in known_locations:
+                    target.setdefault("locations", []).append(location)
+                    known_locations.add(location_key)
+            target["unit"] = target["locations"][0].get("unit") or "Imported"
+            target["page"] = target["locations"][0].get("page")
+            if not target.get("meaning") and entry.get("meaning"):
+                target["meaning"] = entry["meaning"]
+            if entry.get("frequency") == "high":
+                target["frequency"] = "high"
+            target["in_syllabus"] = bool(target.get("in_syllabus")) or bool(entry.get("in_syllabus"))
+            for key, value in entry.get("customFields", {}).items():
+                if key and value is not None and not target.setdefault("customFields", {}).get(key):
+                    target["customFields"][key] = value
+    result = list(merged.values())
+    for order, entry in enumerate(result):
+        entry["order"] = order
+    return result
+
+
 def get_selected_libraries(
     selected_library_ids: list[str],
     include_extra: bool,
@@ -966,7 +1208,7 @@ def get_selected_libraries(
         lib_type = lib.get("type")
         if lib_type == "main" and lib_id in id_set:
             selected.append(lib)
-        if include_extra and lib_id == EXTRA_LIBRARY_ID:
+        if include_extra and lib_type == "extra":
             selected.append(lib)
 
     return selected
@@ -1019,7 +1261,7 @@ def get_merged_words(
             else:
                 should_include = lib_id in id_set
 
-        if include_extra and lib_id == EXTRA_LIBRARY_ID:
+        if include_extra and lib_type == "extra":
             should_include = True
 
         if include_basic and lib_id == BASIC_LIBRARY_ID:
@@ -1115,6 +1357,14 @@ def filter_words(
             continue
 
         if q:
+            locations_text = " ".join(
+                f"{location.get('unit', '')} {location.get('page', '')}"
+                for location in (word.get("locations") or [])
+                if isinstance(location, dict)
+            )
+            custom_fields_text = " ".join(
+                f"{key} {value}" for key, value in (word.get("customFields") or {}).items()
+            )
             searchable = " ".join(
                 [
                     str(word.get("lemma", "")),
@@ -1124,6 +1374,8 @@ def filter_words(
                     str(word.get("libraryName", "")),
                     str(word.get("libraryType", "")),
                     str(word.get("meaning", "")),
+                    locations_text,
+                    custom_fields_text,
                 ]
             ).lower()
             if q not in searchable:
@@ -1274,15 +1526,12 @@ def mask_api_key(api_key: str) -> str:
 
 def merge_ai_settings(override: AISettingsPayload | None) -> dict:
     saved = load_ai_settings()
-    if override is None:
-        return saved
-
-    payload = override.model_dump(exclude_none=True)
     merged = saved.copy()
-    merged.update(payload)
+    payload = override.model_dump(exclude_none=True) if override is not None else {}
+    merged.update({key: value for key, value in payload.items() if key != "apiKey"})
 
-    if not payload.get("apiKey"):
-        merged["apiKey"] = saved.get("apiKey", "")
+    # Request keys are session-only. Persisted settings deliberately never contain API keys.
+    merged["apiKey"] = safe_text(payload.get("apiKey")) or environment_api_key()
 
     merged["provider"] = safe_text(merged.get("provider")) or "openai-compatible"
     merged["baseUrl"] = safe_text(merged.get("baseUrl")) or ""
@@ -1338,7 +1587,10 @@ def validate_ai_settings(settings: dict) -> None:
     if not settings.get("model"):
         raise HTTPException(status_code=400, detail="AI Model 未配置。")
     if not settings.get("apiKey"):
-        raise HTTPException(status_code=400, detail="AI API Key 未配置。")
+        raise HTTPException(
+            status_code=400,
+            detail="AI API Key 未配置。请设置 AI_API_KEY 环境变量，或在当前页面临时输入 Key。",
+        )
 
 
 def ai_chat_endpoint(base_url: str) -> str:
@@ -1362,12 +1614,13 @@ def article_cache_key(settings: dict, text: str) -> str:
     return sha_text(raw)
 
 
-def chat_cache_key(settings: dict, message: str, file_texts: list[dict]) -> str:
+def chat_cache_key(settings: dict, message: str, file_texts: list[dict], history: list[dict] | None = None) -> str:
     joined_files = "\n".join(
         f"[{item['name']}]\n{item['content']}"
         for item in file_texts
     )
-    raw = f"{settings.get('provider')}|{settings.get('baseUrl')}|{settings.get('model')}|chat|{message}|{joined_files}"
+    history_text = json.dumps((history or [])[-10:], ensure_ascii=False, sort_keys=True)
+    raw = f"{settings.get('provider')}|{settings.get('baseUrl')}|{settings.get('model')}|chat|{message}|{joined_files}|{history_text}"
     return sha_text(raw)
 
 
@@ -1473,6 +1726,8 @@ def normalize_derivative_item(item) -> dict | None:
     if isinstance(item, dict):
         word = safe_text(item.get("word") or item.get("lemma") or item.get("name"))
         meaning = safe_text(item.get("meaning") or item.get("translation"))
+        relation = safe_text(item.get("relation") or item.get("form") or item.get("type"))
+        source = safe_text(item.get("source")) or "ai"
     else:
         raw = safe_text(item)
         if not raw:
@@ -1481,6 +1736,8 @@ def normalize_derivative_item(item) -> dict | None:
         parts = re.split(r"[:：]\s*", raw, maxsplit=1)
         word = safe_text(parts[0])
         meaning = safe_text(parts[1]) if len(parts) > 1 else None
+        relation = None
+        source = "ai"
 
     if not word and not meaning:
         return None
@@ -1488,6 +1745,8 @@ def normalize_derivative_item(item) -> dict | None:
     return {
         "word": word or "",
         "meaning": meaning or "",
+        "relation": relation or "",
+        "source": source,
     }
 
 
@@ -1505,7 +1764,7 @@ def normalize_derivative_items(value) -> list[dict]:
         if not normalized:
             continue
 
-        key = f"{normalized['word']}|{normalized['meaning']}"
+        key = f"{normalized['word']}|{normalized['meaning']}|{normalized['relation']}"
         if key in seen:
             continue
 
@@ -1543,6 +1802,8 @@ def normalize_ai_word_result(word: str, data: dict) -> dict:
         "meaning": safe_text(data.get("meaning")) or "",
         "posDetails": pos_details,
         "pos": [item["en"] or item["zh"] for item in pos_details if item["en"] or item["zh"]],
+        "ipa": safe_text(data.get("ipa") or data.get("phonetic")) or "",
+        "audioUrl": safe_text(data.get("audioUrl") or data.get("audio_url")) or "",
         "derivatives": derivatives,
         "aiFrequency": ai_frequency,
         "aiFrequencyText": ai_frequency_text(ai_frequency),
@@ -1625,8 +1886,15 @@ def call_ai_chat(settings: dict, messages: list[dict]) -> str:
     return content
 
 
-def build_word_query_messages(word: str, context: str | None) -> list[dict]:
+def build_word_query_messages(word: str, context: str | None, library_context: dict | None = None) -> list[dict]:
     context_block = f"文章上下文：{context}" if context else "无上下文"
+    library_context = library_context if isinstance(library_context, dict) else {}
+    library_bits = []
+    for label, key in (("词库", "libraryName"), ("教材位置", "unit"), ("页码", "page"), ("已有释义", "meaning"), ("自定义信息", "customFields")):
+        value = library_context.get(key)
+        if value not in (None, "", {}, []):
+            library_bits.append(f"{label}：{json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value}")
+    library_block = "\n".join(library_bits) if library_bits else "无词库补充信息"
     return [
         {
             "role": "system",
@@ -1634,7 +1902,7 @@ def build_word_query_messages(word: str, context: str | None) -> list[dict]:
                 "你是英语词汇学习助手。"
                 "请严格只返回 JSON，不要返回 Markdown，不要返回解释文字。"
                 "JSON 结构必须为："
-                '{"word":"","lemma":"","meaning":"","posDetails":[{"en":"","zh":""}],"derivatives":[{"word":"","meaning":""}],"aiFrequency":"high|low","example":"","exampleTranslation":""}'
+                '{"word":"","lemma":"","meaning":"","ipa":"","audioUrl":"","posDetails":[{"en":"","zh":""}],"derivatives":[{"word":"","meaning":"","relation":"","source":"ai"}],"aiFrequency":"high|low","example":"","exampleTranslation":""}'
             ),
         },
         {
@@ -1642,7 +1910,8 @@ def build_word_query_messages(word: str, context: str | None) -> list[dict]:
             "content": (
                 f"请分析这个英语单词：{word}\n"
                 f"{context_block}\n"
-                "请给出：原词、lemma、中文翻译、词性（英文+中文）、常见派生词及每个派生词的中文翻译、AI判断的高考英语高低频、1个英文例句、1个例句中文翻译。"
+                f"词库上下文：\n{library_block}\n"
+                "请给出：原词、lemma、中文翻译、国际音标（没有把握则空字符串）、词性（英文+中文）、常见派生词及每个派生词的中文翻译。派生词必须带 relation，例如‘过去式 +ed’或‘名词派生’，source 固定为 ai。audioUrl 仅在有可靠的直接音频 URL 时填写，否则为空字符串。不要猜测词根。"
             ),
         },
     ]
@@ -1665,7 +1934,25 @@ def build_article_translate_messages(text: str) -> list[dict]:
     ]
 
 
-def build_chat_messages(message: str, file_texts: list[dict]) -> list[dict]:
+def build_import_draft_messages(text: str) -> list[dict]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "你是词库导入预处理助手。"
+                "请从半结构化词表中提取英语词条。"
+                "严格只返回 JSON，不要 Markdown 或解释。"
+                "JSON 结构必须为："
+                '{"headers":["word","meaning"],"rows":[["example","示例"]]}。'
+                "headers 可使用 word、meaning、unit、lesson、page、frequency、pos、ipa、audio_url、serial；"
+                "仅保留可确认的英文单词，最多 300 行。"
+            ),
+        },
+        {"role": "user", "content": text[:20000]},
+    ]
+
+
+def build_chat_messages(message: str, file_texts: list[dict], history: list[dict] | None = None) -> list[dict]:
     file_block = ""
     if file_texts:
         chunks = []
@@ -1677,7 +1964,7 @@ def build_chat_messages(message: str, file_texts: list[dict]) -> list[dict]:
     if file_block:
         user_content += f"\n\n以下是用户上传的文件内容，请结合一起回答：\n{file_block}"
 
-    return [
+    messages = [
         {
             "role": "system",
             "content": (
@@ -1686,11 +1973,14 @@ def build_chat_messages(message: str, file_texts: list[dict]) -> list[dict]:
                 "回答要准确、简洁、结构清晰。"
             ),
         },
-        {
-            "role": "user",
-            "content": user_content,
-        },
     ]
+    for item in (history or [])[-10:]:
+        role = item.get("role")
+        content = safe_text(item.get("content"))
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_content})
+    return messages
 
 
 @app.on_event("startup")
@@ -1714,6 +2004,7 @@ def list_libraries():
     libraries = load_libraries()
     return {
         "libraries": [summarize_library(lib) for lib in libraries],
+        "defaultExtraLibraryId": get_default_extra_library_id(libraries),
     }
 
 
@@ -1771,6 +2062,45 @@ def add_basic_words(request: AddBasicWordsRequest):
     }
 
 
+@app.post("/api/basic-words/delete")
+def delete_basic_words(request: BasicWordsDeleteRequest):
+    ensure_data_files()
+    targets = {primary_lemma(word) for word in request.words if primary_lemma(word)}
+    if not targets:
+        raise HTTPException(status_code=400, detail="请至少指定一个有效单词。")
+    libraries = load_libraries()
+    basic_library = get_basic_library(libraries)
+    previous = basic_library.get("entries", [])
+    basic_library["entries"] = [entry for entry in previous if str(entry.get("lemma", "")).lower() not in targets]
+    for index, entry in enumerate(basic_library["entries"]):
+        entry["order"] = index
+    save_libraries(libraries)
+    return {"ok": True, "deleted": len(previous) - len(basic_library["entries"]), "library": summarize_library(basic_library)}
+
+
+@app.post("/api/basic-words/reset")
+def reset_basic_words():
+    ensure_data_files()
+    libraries = load_libraries()
+    basic_library = get_basic_library(libraries)
+    basic_library["entries"] = []
+    save_libraries(libraries)
+    return {"ok": True, "library": summarize_library(basic_library)}
+
+
+@app.get("/api/basic-words/export")
+def export_basic_words():
+    ensure_data_files()
+    libraries = load_libraries()
+    basic_library = get_basic_library(libraries)
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["lemma", "meaning"])
+    writer.writeheader()
+    for entry in basic_library.get("entries", []):
+        writer.writerow({"lemma": entry.get("lemma"), "meaning": entry.get("meaning") or "基础功能词"})
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=basic_whitelist.csv"})
+
+
 @app.get("/api/ai/providers")
 def get_ai_providers():
     ensure_data_files()
@@ -1782,7 +2112,7 @@ def get_ai_providers():
 @app.get("/api/ai/settings")
 def get_ai_settings():
     ensure_data_files()
-    settings = load_ai_settings()
+    settings = merge_ai_settings(None)
     return {
         "provider": settings.get("provider", "openai-compatible"),
         "baseUrl": settings.get("baseUrl", ""),
@@ -1829,7 +2159,8 @@ def ai_word_query(request: AIWordQueryRequest):
 
     settings = merge_ai_settings(request.settings)
     cache = load_ai_cache()
-    cache_key = word_cache_key(settings, lemma)
+    context_signature = json.dumps(request.libraryContext or {}, ensure_ascii=False, sort_keys=True) + (request.context or "")
+    cache_key = word_cache_key(settings, lemma + "|" + hashlib.sha256(context_signature.encode("utf-8")).hexdigest()[:12])
 
     if not request.forceRefresh and cache_key in cache["word"]:
         cached = cache["word"][cache_key]
@@ -1846,7 +2177,7 @@ def ai_word_query(request: AIWordQueryRequest):
             "updatedAt": cached.get("updatedAt"),
         }
 
-    messages = build_word_query_messages(lemma, request.context)
+    messages = build_word_query_messages(lemma, request.context, request.libraryContext)
     raw_content = call_ai_chat(settings, messages)
     parsed = parse_word_ai_json(raw_content)
     normalized = normalize_ai_word_result(lemma, parsed)
@@ -1868,6 +2199,71 @@ def ai_word_query(request: AIWordQueryRequest):
         "data": normalized,
         "updatedAt": cache["word"][cache_key]["updatedAt"],
     }
+
+
+@app.post("/api/vocab/ai-import-draft")
+def ai_import_draft(request: AIImportDraftRequest):
+    ensure_data_files()
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="请先提供要整理的词表文本。")
+    if len(text) > 20000:
+        raise HTTPException(status_code=400, detail="待整理文本不能超过 20000 个字符。")
+
+    raw_content = call_ai_chat(merge_ai_settings(request.settings), build_import_draft_messages(text))
+    parsed = parse_word_ai_json(raw_content)
+
+    headers = [str(item).strip() for item in parsed.get("headers", []) if str(item).strip()]
+    raw_rows = parsed.get("rows", [])
+    if not headers or not isinstance(raw_rows, list):
+        raise HTTPException(status_code=502, detail="AI 草稿缺少 headers 或 rows。")
+
+    rows = []
+    for raw_row in raw_rows[:MAX_IMPORT_ROWS]:
+        if isinstance(raw_row, list):
+            rows.append(([safe_text(cell) or "" for cell in raw_row[:len(headers)]] + [""] * len(headers))[:len(headers)])
+
+    mapping = infer_import_mapping(headers)
+    entries = entries_from_mapping(headers, rows, mapping)
+    return {
+        "headers": headers,
+        "rows": rows,
+        "mapping": mapping,
+        "mappingFields": [{"key": key, "label": label} for key, label in IMPORT_MAPPING_FIELDS],
+        "rowCount": len(rows),
+        "recognizedCount": len(entries),
+        "message": "AI 已生成草稿，请检查映射和内容后再确认导入。",
+    }
+
+
+@app.post("/api/vocab/ai-import-file-draft")
+async def ai_import_file_draft(
+    file: UploadFile = File(...),
+    settingsJson: str = Form("{}"),
+):
+    ensure_data_files()
+    filename = file.filename or ""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="上传文件为空。")
+    if len(content) > MAX_IMPORT_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="导入文件不能超过 5 MB。")
+    try:
+        settings = AISettingsPayload.model_validate(json.loads(settingsJson or "{}"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="AI 设置格式不正确。")
+    try:
+        text = parse_chat_upload_file(filename, content)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=f"文件内容提取失败：{error}")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="未能从文件中提取可供 AI 整理的文本。")
+    draft = ai_import_draft(AIImportDraftRequest(text=text[:20000], settings=settings))
+    draft["filename"] = filename
+    draft["message"] = "AI 已根据上传文件生成草稿；请确认字段映射和内容后再导入。"
+    return draft
 
 
 @app.post("/api/ai/article-translate")
@@ -1912,11 +2308,52 @@ def ai_article_translate(request: AIArticleTranslateRequest):
     }
 
 
+@app.get("/api/chat/sessions")
+def get_chat_sessions():
+    ensure_data_files()
+    return {"sessions": list_chat_sessions()}
+
+
+@app.post("/api/chat/sessions")
+def create_new_chat_session(request: ChatSessionCreateRequest):
+    ensure_data_files()
+    title = safe_text(request.title) or "新对话"
+    return {"session": create_chat_session(f"chat-{uuid.uuid4().hex}", title)}
+
+
+@app.get("/api/chat/sessions/{session_id}")
+def get_one_chat_session(session_id: str):
+    ensure_data_files()
+    session = get_chat_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="对话不存在。")
+    return {"session": session}
+
+
+@app.put("/api/chat/sessions/{session_id}")
+def rename_one_chat_session(session_id: str, request: ChatSessionRenameRequest):
+    ensure_data_files()
+    if not get_chat_session(session_id):
+        raise HTTPException(status_code=404, detail="对话不存在。")
+    title = safe_text(request.title) or "未命名对话"
+    rename_chat_session(session_id, title)
+    return {"ok": True, "title": title}
+
+
+@app.delete("/api/chat/sessions/{session_id}")
+def delete_one_chat_session(session_id: str):
+    ensure_data_files()
+    if not delete_chat_session(session_id):
+        raise HTTPException(status_code=404, detail="对话不存在。")
+    return {"ok": True}
+
+
 @app.post("/api/ai/chat")
 async def ai_chat(
     message: str = Form(...),
     forceRefresh: str = Form("false"),
     settingsJson: str = Form(""),
+    sessionId: str = Form(""),
     files: list[UploadFile] | None = File(None),
 ):
     ensure_data_files()
@@ -1926,6 +2363,10 @@ async def ai_chat(
         raise HTTPException(status_code=400, detail="聊天内容为空。")
 
     settings = parse_settings_json(settingsJson)
+    clean_session_id = safe_text(sessionId)
+    session = get_chat_session(clean_session_id) if clean_session_id else None
+    if clean_session_id and not session:
+        raise HTTPException(status_code=404, detail="对话不存在，请刷新后重试。")
     file_texts = []
 
     if files:
@@ -1940,12 +2381,17 @@ async def ai_chat(
                 "content": extracted[:20000],
             })
 
+    history = session.get("messages", []) if session else []
     cache = load_ai_cache()
     force_refresh_flag = coerce_bool(forceRefresh, False)
-    cache_key = chat_cache_key(settings, clean_message, file_texts)
+    cache_key = chat_cache_key(settings, clean_message, file_texts, history)
 
     if not force_refresh_flag and cache_key in cache["chat"]:
         cached = cache["chat"][cache_key]
+        if clean_session_id:
+            attached_files = [{"name": item["name"]} for item in file_texts]
+            append_chat_message(clean_session_id, "user", clean_message, attached_files)
+            append_chat_message(clean_session_id, "assistant", cached["reply"], cached.get("files", []))
         return {
             "ok": True,
             "cached": True,
@@ -1954,7 +2400,7 @@ async def ai_chat(
             "files": cached.get("files", []),
         }
 
-    messages = build_chat_messages(clean_message, file_texts)
+    messages = build_chat_messages(clean_message, file_texts, history)
     reply = call_ai_chat(settings, messages).strip()
 
     cache["chat"][cache_key] = {
@@ -1967,6 +2413,10 @@ async def ai_chat(
         "files": [{"name": item["name"]} for item in file_texts],
     }
     save_ai_cache(cache)
+
+    if clean_session_id:
+        append_chat_message(clean_session_id, "user", clean_message, [{"name": item["name"]} for item in file_texts])
+        append_chat_message(clean_session_id, "assistant", reply, cache["chat"][cache_key]["files"])
 
     return {
         "ok": True,
@@ -2107,10 +2557,218 @@ async def upload_vocab(
     }
 
 
+@app.post("/api/vocab/import-preview")
+async def vocab_import_preview(file: UploadFile = File(...)):
+    ensure_data_files()
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="上传文件为空。")
+    if len(content) > MAX_IMPORT_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="导入文件不能超过 5 MB。")
+    headers, rows = parse_upload_table(file.filename or "", content)
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise HTTPException(status_code=400, detail=f"当前导入最多支持 {MAX_IMPORT_ROWS} 行数据，请拆分文件后重试。")
+    mapping = infer_import_mapping(headers)
+    entries = entries_from_mapping(headers, rows, mapping)
+    return {
+        "filename": file.filename or "", "headers": headers, "rows": rows,
+        "mapping": mapping, "sample": entries[:10], "rowCount": len(rows),
+        "recognizedCount": len(entries),
+        "mappingFields": [{"key": key, "label": label} for key, label in IMPORT_MAPPING_FIELDS],
+        "message": "请确认单词列映射后再导入；单元、页码、频率等均为可选，未映射列会作为自定义字段保留。",
+    }
+
+
+@app.post("/api/vocab/import-confirm")
+def vocab_import_confirm(request: ImportConfirmRequest):
+    ensure_data_files()
+    if len(request.rows) > MAX_IMPORT_ROWS:
+        raise HTTPException(status_code=400, detail=f"单次导入最多支持 {MAX_IMPORT_ROWS} 行数据。")
+    entries = entries_from_mapping(request.headers, request.rows, request.mapping)
+    if not entries:
+        raise HTTPException(status_code=400, detail="未识别到单词；请将一个源列映射为“单词/lemma”。")
+    libraries = load_libraries()
+    if request.targetType == "basic":
+        basic_library = get_basic_library(libraries)
+        existing = {str(entry.get("lemma", "")).lower() for entry in basic_library.get("entries", [])}
+        added = 0
+        for entry in entries:
+            if entry["lemma"] in existing:
+                continue
+            existing.add(entry["lemma"])
+            basic_library.setdefault("entries", []).append({
+                **entry,
+                "unit": "Basic",
+                "locations": [{"unit": "Basic", "page": None}],
+                "in_syllabus": False,
+                "meaning": entry.get("meaning") or "基础功能词",
+                "order": len(basic_library["entries"]),
+            })
+            added += 1
+        save_libraries(libraries)
+        return {"ok": True, "library": summarize_library(basic_library), "importedCount": added}
+    library = {
+        "id": make_library_id(), "name": safe_text(request.libraryName) or "未命名词库",
+        "type": "main", "createdAt": now_iso(), "entries": entries,
+    }
+    libraries.append(library)
+    get_extra_library(libraries)
+    get_basic_library(libraries)
+    save_libraries(libraries)
+    return {"ok": True, "library": summarize_library(library), "importedCount": len(entries)}
+
+
+@app.get("/api/libraries/{library_id}/export")
+def export_library(library_id: str):
+    ensure_data_files()
+    target = next((lib for lib in load_libraries() if lib.get("id") == library_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="词库不存在。")
+    output = io.StringIO()
+    fieldnames = ["lemma", "unit", "page", "frequency", "in_syllabus", "meaning", "locations", "custom_fields"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for entry in target.get("entries", []):
+        writer.writerow({
+            "lemma": entry.get("lemma"), "unit": entry.get("unit"), "page": entry.get("page"),
+            "frequency": entry.get("frequency"), "in_syllabus": entry.get("in_syllabus"),
+            "meaning": entry.get("meaning") or "", "locations": json.dumps(entry.get("locations", []), ensure_ascii=False),
+            "custom_fields": json.dumps(entry.get("customFields", {}), ensure_ascii=False),
+        })
+    filename = f"{target.get('name', 'vocab')}.csv"
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"})
+
+
+@app.delete("/api/libraries/{library_id}")
+def delete_library(library_id: str, confirm: str = Query("")):
+    ensure_data_files()
+    if confirm != "DELETE":
+        raise HTTPException(status_code=400, detail="请确认删除操作。")
+    libraries = load_libraries()
+    target = next((lib for lib in libraries if lib.get("id") == library_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="词库不存在。")
+    if target.get("type") == "basic":
+        raise HTTPException(status_code=400, detail="基础词白名单不能删除。")
+    if target.get("type") == "extra":
+        extras = get_extra_libraries(libraries)
+        if len(extras) <= 1:
+            raise HTTPException(status_code=400, detail="至少需要保留一个补充词库。")
+        if library_id == get_default_extra_library_id(libraries):
+            raise HTTPException(status_code=400, detail="请先在词库管理中切换默认补充词库，再删除当前词库。")
+    save_libraries([lib for lib in libraries if lib.get("id") != library_id])
+    return {"ok": True, "deleted": summarize_library(target)}
+
+
+@app.post("/api/extra-libraries")
+def create_extra_library(request: LibraryCreateRequest):
+    ensure_data_files()
+    name = safe_text(request.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="请填写补充词库名称。")
+    libraries = load_libraries()
+    library = {"id": make_library_id(), "name": name, "type": "extra", "createdAt": now_iso(), "entries": []}
+    libraries.append(library)
+    save_libraries(libraries)
+    return {"ok": True, "library": summarize_library(library)}
+
+
+@app.put("/api/libraries/{library_id}")
+def rename_library(library_id: str, request: LibraryRenameRequest):
+    ensure_data_files()
+    name = safe_text(request.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="请填写词库名称。")
+    libraries = load_libraries()
+    target = next((library for library in libraries if library.get("id") == library_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="词库不存在。")
+    if target.get("type") == "basic":
+        raise HTTPException(status_code=400, detail="基础词白名单不能重命名。")
+    target["name"] = name
+    save_libraries(libraries)
+    return {"ok": True, "library": summarize_library(target)}
+
+
+@app.post("/api/libraries/merge")
+def merge_libraries(request: LibraryMergeRequest):
+    ensure_data_files()
+    source_ids = list(dict.fromkeys(item for item in request.sourceLibraryIds if safe_text(item)))
+    name = safe_text(request.name)
+    if len(source_ids) != 2:
+        raise HTTPException(status_code=400, detail="请选择两个不同的主词库。")
+    if not name:
+        raise HTTPException(status_code=400, detail="请填写合并后词库名称。")
+    libraries = load_libraries()
+    sources = [next((library for library in libraries if library.get("id") == source_id), None) for source_id in source_ids]
+    if any(source is None or source.get("type") != "main" for source in sources):
+        raise HTTPException(status_code=400, detail="只能合并两个主词库。")
+    merged_library = {"id": make_library_id(), "name": name, "type": "main", "createdAt": now_iso(), "entries": merge_library_entries(sources)}
+    next_libraries = [library for library in libraries if not request.deleteSources or library.get("id") not in source_ids]
+    next_libraries.append(merged_library)
+    save_libraries(next_libraries)
+    return {"ok": True, "library": summarize_library(merged_library), "sourceDeleted": bool(request.deleteSources)}
+
+
+@app.post("/api/extra-libraries/default")
+def set_default_extra_library(request: DefaultExtraLibraryRequest):
+    ensure_data_files()
+    libraries = load_libraries()
+    target = get_extra_library_by_id(libraries, request.libraryId)
+    sqlite_save_setting("default_extra_library_id", target["id"])
+    return {"ok": True, "defaultExtraLibraryId": target["id"]}
+
+
+@app.get("/api/review/due")
+def get_review_due(limit: int = Query(30, ge=1, le=100)):
+    ensure_data_files()
+    status = load_user_status()
+    words = get_merged_words(library_ids=None, include_extra=True, include_basic=False)
+    candidates = filter_words(words, "", "all", status)
+    due_schedules = get_due_review_schedules(now_iso())
+    candidates = [word for word in candidates if 0 < word.get("level", 0) < 12]
+    for word in candidates:
+        schedule = due_schedules.get(word.get("lemma")) or get_review_schedule(word.get("lemma"))
+        word["dueAt"] = schedule.get("dueAt")
+        word["intervalDays"] = schedule.get("intervalDays", 0)
+    candidates = [word for word in candidates if word.get("dueAt") is None or word.get("lemma") in due_schedules]
+    candidates.sort(key=lambda word: (word.get("dueAt") is not None, word.get("level", 0), word.get("lemma", "")))
+    return {"items": candidates[:limit], "total": len(candidates)}
+
+
+@app.post("/api/review/mark")
+def mark_review(request: ReviewMarkRequest):
+    ensure_data_files()
+    lemma = primary_lemma(request.lemma)
+    if not lemma:
+        raise HTTPException(status_code=400, detail="无效单词。")
+    status = load_user_status()
+    previous = status.get(lemma, {})
+    level = update_level_by_mark(int(previous.get("level", 0)), previous.get("lastMark"), request.mark)
+    status[lemma] = {**previous, "level": level, "lastMark": request.mark, "updatedAt": now_iso(), "seenCount": int(previous.get("seenCount", 0)) + 1, "knownStreak": int(previous.get("knownStreak", 0)) + 1 if request.mark == "known" else 0}
+    save_user_status(status)
+    schedule = get_review_schedule(lemma)
+    old_interval = int(schedule.get("intervalDays", 0))
+    old_repetitions = int(schedule.get("repetitions", 0))
+    if request.mark == "known":
+        interval = min(max(old_interval * 2, 1), 90)
+        repetitions = old_repetitions + 1
+    elif request.mark == "fuzzy":
+        interval = 1
+        repetitions = max(old_repetitions - 1, 0)
+    else:
+        interval = 0
+        repetitions = 0
+    due_at = (datetime.now(timezone.utc) + timedelta(days=interval)).isoformat()
+    save_review_schedule(lemma, due_at, interval, repetitions)
+    return {"ok": True, "lemma": lemma, "level": level, "levelLabel": level_label(level), "dueAt": due_at, "intervalDays": interval}
+
+
 @app.post("/api/user-status/reset")
 def reset_user_status():
     ensure_data_files()
     save_user_status({})
+    clear_review_schedules()
     return {
         "ok": True,
         "message": "认识情况已重置。",
@@ -2127,7 +2785,7 @@ def add_extra_vocab(request: AddExtraWordRequest):
         raise HTTPException(status_code=400, detail="无效单词。")
 
     libraries = load_libraries()
-    extra = get_extra_library(libraries)
+    extra = get_extra_library_by_id(libraries, request.libraryId)
     entries = extra.get("entries", [])
 
     exists = any(str(entry.get("lemma", "")).lower() == lemma for entry in entries)
@@ -2165,6 +2823,7 @@ def add_extra_vocab(request: AddExtraWordRequest):
     return {
         "ok": True,
         "lemma": lemma,
+        "library": summarize_library(extra),
         "overview": build_mastery_overview(),
     }
 
@@ -2303,6 +2962,8 @@ def analyze(request: AnalyzeRequest):
                         "frequency": frequency,
                         "frequencyText": frequency_text(frequency),
                         "meaning": meaning,
+                        "locations": entry.get("locations", []) if entry else [],
+                        "customFields": entry.get("customFields", {}) if entry else {},
                         "outsideText": outside_label,
                         "outside": outside,
                         "basicIgnored": False,
@@ -2335,6 +2996,8 @@ def analyze(request: AnalyzeRequest):
                 "frequency": frequency,
                 "frequencyText": frequency_text(frequency) if matched else None,
                 "meaning": meaning,
+                "locations": entry.get("locations", []) if entry else [],
+                "customFields": entry.get("customFields", {}) if entry else {},
                 "outside": outside,
                 "outsideText": outside_label,
                 "basicIgnored": is_basic_ignored,

@@ -162,8 +162,9 @@ function buildTokenMiniInfo(token) {
     parts.push(item.unit);
   }
 
-  if (item.sourceText && item.libraryType === "extra") {
-    parts.push("补充词库");
+  if (item.libraryType === "extra") {
+    parts.push(item.sourceText || "补充词库");
+    return parts.join(" · ");
   }
 
   if (item.frequencyText) {
@@ -185,9 +186,9 @@ function buildFocusMeta(word) {
     parts.push(word.libraryName);
   }
 
-  if (word.unit && word.page) {
+  if (word.libraryType !== "extra" && word.unit && word.page) {
     parts.push(`${word.unit} / p.${word.page}`);
-  } else if (word.unit) {
+  } else if (word.libraryType !== "extra" && word.unit) {
     parts.push(word.unit);
   }
 
@@ -199,7 +200,7 @@ function buildFocusMeta(word) {
     parts.push("主词库");
   }
 
-  if (word.frequencyText) {
+  if (word.libraryType !== "extra" && word.frequencyText) {
     parts.push(word.frequencyText);
   }
 
@@ -302,22 +303,35 @@ function normalizePosDetails(result) {
 }
 
 function normalizeDerivativeDetails(result) {
-  const raw = Array.isArray(result?.derivatives) ? result.derivatives : [];
+  const raw = [
+    ...(Array.isArray(result?.derivatives) ? result.derivatives : []),
+    ...(Array.isArray(result?.wordForms) ? result.wordForms : [])
+  ];
   return raw
     .map((item) => {
       if (typeof item === "string") {
         const [wordPart, meaningPart = ""] = item.split(/[:：]\s*/);
         return {
           word: (wordPart || "").trim(),
-          meaning: (meaningPart || "").trim()
+          meaning: (meaningPart || "").trim(),
+          relation: "",
+          source: "ai"
         };
       }
       return {
         word: item?.word || item?.lemma || item?.name || "",
-        meaning: item?.meaning || item?.translation || ""
+        meaning: item?.meaning || item?.translation || "",
+        relation: item?.relation || item?.form || item?.type || "",
+        source: item?.source || "ai"
       };
     })
     .filter((item) => item.word || item.meaning);
+}
+
+function getCustomField(customFields, names) {
+  const fields = customFields || {};
+  const matchedKey = Object.keys(fields).find((key) => names.includes(String(key).trim().toLowerCase()));
+  return matchedKey ? fields[matchedKey] : "";
 }
 
 function buildWordDetailFromToken(token) {
@@ -333,6 +347,11 @@ function buildWordDetailFromToken(token) {
     unit: analysis?.unit || "",
     page: analysis?.page || "",
     frequencyText: analysis?.frequencyText || "",
+    locations: analysis?.locations || [],
+    customFields: analysis?.customFields || {},
+    ipa: analysis?.ipa || getCustomField(analysis?.customFields, ["音标", "ipa", "phonetic", "pronunciation"]),
+    audioUrl: analysis?.audioUrl || getCustomField(analysis?.customFields, ["音频链接", "audio_url", "audio", "sound_url"]),
+    pos: analysis?.pos || getCustomField(analysis?.customFields, ["词性", "pos", "part_of_speech"]),
     level: analysis?.level,
     levelLabel: analysis?.levelLabel || "",
     outside: !!analysis?.outside,
@@ -354,6 +373,11 @@ function buildWordDetailFromFocusWord(word) {
     unit: word?.unit || "",
     page: word?.page || "",
     frequencyText: word?.frequencyText || "",
+    locations: word?.locations || [],
+    customFields: word?.customFields || {},
+    ipa: word?.ipa || getCustomField(word?.customFields, ["音标", "ipa", "phonetic", "pronunciation"]),
+    audioUrl: word?.audioUrl || getCustomField(word?.customFields, ["音频链接", "audio_url", "audio", "sound_url"]),
+    pos: word?.pos || getCustomField(word?.customFields, ["词性", "pos", "part_of_speech"]),
     outside: !!word?.outside,
     outsideText: word?.outsideText || "",
     basicIgnored: !!word?.basicIgnored,
@@ -362,29 +386,43 @@ function buildWordDetailFromFocusWord(word) {
 }
 
 function Sidebar({ activePage, setActivePage }) {
+  const homeActive = activePage === "home" || activePage.startsWith("home-");
+  const libraryActive = activePage === "library" || activePage.startsWith("library-");
   return (
     <aside className="sidebar">
       <div className="sidebar-title">词汇诊断</div>
       <button
         type="button"
-        className={`sidebar-item ${activePage === "home" ? "active" : ""}`}
+        className={`sidebar-item ${homeActive ? "active" : ""}`}
         onClick={() => setActivePage("home")}
       >
         首页
       </button>
+      <button type="button" className={`sidebar-item sidebar-subitem ${activePage === "home-libraries" ? "active" : ""}`} onClick={() => setActivePage("home-libraries")}>参与分析词库</button>
+      <button type="button" className={`sidebar-item sidebar-subitem ${activePage === "home-analysis" ? "active" : ""}`} onClick={() => setActivePage("home-analysis")}>分析设置</button>
       <button
         type="button"
-        className={`sidebar-item ${activePage === "library" ? "active" : ""}`}
+        className={`sidebar-item ${libraryActive ? "active" : ""}`}
         onClick={() => setActivePage("library")}
       >
         单词库
       </button>
+      <button type="button" className={`sidebar-item sidebar-subitem ${activePage === "library-import" ? "active" : ""}`} onClick={() => setActivePage("library-import")}>导入词库</button>
+      <button type="button" className={`sidebar-item sidebar-subitem ${activePage === "library-basic" ? "active" : ""}`} onClick={() => setActivePage("library-basic")}>基础词白名单</button>
+      <button type="button" className={`sidebar-item sidebar-subitem ${activePage === "library-manage" ? "active" : ""}`} onClick={() => setActivePage("library-manage")}>词库管理</button>
       <button
         type="button"
         className={`sidebar-item ${activePage === "chat" ? "active" : ""}`}
         onClick={() => setActivePage("chat")}
       >
         AI 对话
+      </button>
+      <button
+        type="button"
+        className={`sidebar-item sidebar-subitem ${activePage === "ai-settings" ? "active" : ""}`}
+        onClick={() => setActivePage("ai-settings")}
+      >
+        AI 设置
       </button>
     </aside>
   );
@@ -397,10 +435,11 @@ function AISettingsPanel({
   fieldHelp,
   embedded = false,
   title = "AI 设置",
-  subtitle = "本地配置"
+  subtitle = "非敏感设置会保存到本机"
 }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
 
   const selectedProvider =
@@ -429,7 +468,7 @@ function AISettingsPanel({
         provider: result.provider,
         baseUrl: result.baseUrl,
         model: result.model,
-        apiKey: "",
+        apiKey: prev.apiKey,
         apiKeyMasked: result.apiKeyMasked,
         hasApiKey: result.hasApiKey,
         temperature: result.temperature,
@@ -437,7 +476,11 @@ function AISettingsPanel({
         verifySSL: result.verifySSL
       }));
 
-      setMessage("AI 设置已保存。");
+      setMessage(
+        aiSettings.apiKey
+          ? "非敏感设置已保存；当前输入的 API Key 仅在本次会话中使用。"
+          : "非敏感 AI 设置已保存。"
+      );
     } catch (error) {
       setError(`保存 AI 设置失败：${error.message}`);
     } finally {
@@ -498,8 +541,8 @@ function AISettingsPanel({
           type="password"
           placeholder={
             aiSettings.hasApiKey
-              ? `已保存密钥：${aiSettings.apiKeyMasked || "已存在"}，留空则保留`
-              : "API Key"
+              ? `已配置：${aiSettings.apiKeyMasked || "已存在"}；输入仅当前会话有效`
+              : "API Key（仅当前会话有效）"
           }
           value={aiSettings.apiKey}
           onChange={(event) =>
@@ -511,6 +554,13 @@ function AISettingsPanel({
           <div className="setting-help-title">平台说明</div>
           <div className="setting-help-text">
             {selectedProvider?.note || "可填写任意 OpenAI 兼容接口。"}
+          </div>
+        </div>
+
+        <div className="setting-help-card">
+          <div className="setting-help-title">API Key 安全</div>
+          <div className="setting-help-text">
+            推荐设置 AI_API_KEY 环境变量。此处输入的 Key 仅用于当前浏览器会话，不会写入项目文件。
           </div>
         </div>
 
@@ -602,14 +652,27 @@ function UploadPanel({
   refreshLibraries,
   selectedLibraryIds,
   setSelectedLibraryIds,
-  setError
+  aiSettings
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [libraryName, setLibraryName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [mapping, setMapping] = useState({});
+  const [editableRows, setEditableRows] = useState([]);
+  const [customHeader, setCustomHeader] = useState("");
+  const [customDefaultValue, setCustomDefaultValue] = useState("");
 
-  const handleUpload = async () => {
+  const applyDraft = (result, message) => {
+    setPreview(result);
+    setMapping(result.mapping || {});
+    setEditableRows((result.rows || []).map((row) => [...row]));
+    setMessage(message || result.message || "请确认字段映射和词条内容。");
+  };
+
+  const handlePreview = async () => {
     if (!selectedFile) {
       setError("请先选择词库文件。");
       return;
@@ -624,18 +687,8 @@ function UploadPanel({
       formData.append("file", selectedFile);
       formData.append("libraryName", libraryName);
 
-      const result = await postForm("/api/vocab/upload", formData);
-      await refreshLibraries();
-
-      if (result.library?.id) {
-        setSelectedLibraryIds((prev) =>
-          prev.includes(result.library.id) ? prev : [...prev, result.library.id]
-        );
-      }
-
-      setMessage(`上传成功：${result.library.name}，共 ${result.importedCount} 个词。`);
-      setLibraryName("");
-      setSelectedFile(null);
+      const result = await postForm("/api/vocab/import-preview", formData);
+      applyDraft(result, `已读取 ${result.rowCount} 行，识别到 ${result.recognizedCount} 个可导入词条。请确认映射。`);
     } catch (error) {
       setError(`上传失败：${error.message}`);
     } finally {
@@ -643,12 +696,89 @@ function UploadPanel({
     }
   };
 
+  const handleAiDraft = async () => {
+    if (!selectedFile) {
+      setError("请先选择需要 AI 整理的文件。");
+      return;
+    }
+    setUploading(true);
+    setError("");
+    setMessage("");
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("settingsJson", JSON.stringify(buildAISettingsPayload(aiSettings)));
+      const result = await postForm("/api/vocab/ai-import-file-draft", formData);
+      applyDraft(result, result.message);
+    } catch (error) {
+      setError(`AI 整理失败：${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!preview) return;
+    setUploading(true);
+    setError("");
+    try {
+      const result = await postJson("/api/vocab/import-confirm", {
+        libraryName: libraryName || selectedFile?.name?.replace(/\.[^.]+$/, "") || "未命名词库",
+        headers: preview.headers,
+        rows: editableRows,
+        mapping
+      });
+      await refreshLibraries();
+      if (result.library?.id) {
+        setSelectedLibraryIds((prev) => prev.includes(result.library.id) ? prev : [...prev, result.library.id]);
+      }
+      setMessage(`导入成功：${result.library.name}，共 ${result.importedCount} 个词条。`);
+      setPreview(null);
+      setMapping({});
+      setEditableRows([]);
+      setLibraryName("");
+      setSelectedFile(null);
+    } catch (error) {
+      setError(`导入失败：${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const mainCount = libraries.filter((lib) => lib.type === "main").length;
+
+  const updateEditableCell = (rowIndex, columnIndex, value) => {
+    setEditableRows((prev) => prev.map((row, currentRowIndex) => {
+      if (currentRowIndex !== rowIndex) return row;
+      return row.map((cell, currentColumnIndex) => currentColumnIndex === columnIndex ? value : cell);
+    }));
+  };
+
+  const removeEditableRow = (rowIndex) => {
+    setEditableRows((prev) => prev.filter((_, index) => index !== rowIndex));
+  };
+
+  const addCustomColumn = () => {
+    const header = customHeader.trim();
+    if (!header) {
+      setError("请先输入自定义表头名称。");
+      return;
+    }
+    if (preview.headers.some((item) => item.trim().toLowerCase() === header.toLowerCase())) {
+      setError("该表头已存在，请换一个名称。");
+      return;
+    }
+    setPreview((prev) => ({ ...prev, headers: [...prev.headers, header] }));
+    setEditableRows((prev) => prev.map((row) => [...row, customDefaultValue]));
+    setCustomHeader("");
+    setCustomDefaultValue("");
+    setError("");
+  };
 
   return (
     <section className="panel upload-panel">
       <div className="panel-title">
-        <h2>0. 上传词库</h2>
+        <h2>0. 导入词库</h2>
         <span>主词库 {mainCount} 个</span>
       </div>
 
@@ -665,21 +795,98 @@ function UploadPanel({
           value={libraryName}
           onChange={(event) => setLibraryName(event.target.value)}
         />
-        <button
-          type="button"
-          className="primary-btn"
-          onClick={handleUpload}
-          disabled={uploading}
-        >
-          {uploading ? "上传中..." : "上传为新主词库"}
+        <button type="button" className="primary-btn" onClick={handlePreview} disabled={uploading}>
+          {uploading ? "处理中..." : "读取文件"}
+        </button>
+        <button type="button" className="secondary-btn" onClick={handleAiDraft} disabled={uploading || !selectedFile}>
+          {uploading ? "AI 整理中..." : "AI 整理此文件"}
         </button>
       </div>
 
       <div className="upload-tips">
-        推荐上传 csv/xlsx。字段可包含：lemma、unit、page、frequency、in_syllabus、meaning。
+        先“读取文件”保留原表格，或选择“AI 整理此文件”把 TXT、DOCX、PDF 等半结构化资料转成草稿。AI 仅生成预览，确认导入前不会写入词库。
       </div>
 
       {message ? <div className="success-box">{message}</div> : null}
+      {error ? <div className="error-box">{error}</div> : null}
+      {preview ? (
+        <div className="import-preview">
+          <div className="panel-title compact">
+            <h2>预处理与字段映射</h2>
+            <span>仅单词必填；单次最多 300 行</span>
+          </div>
+          <div className="import-map-grid">
+            {(preview.mappingFields || [
+              { key: "lemma", label: "单词（必填）" }, { key: "meaning", label: "释义" },
+              { key: "unit", label: "单元" }, { key: "lesson", label: "课程/章节" },
+              { key: "page", label: "页码" }, { key: "frequency", label: "频率" },
+              { key: "pos", label: "词性" }, { key: "ipa", label: "音标" },
+              { key: "audio_url", label: "音频链接" },
+              { key: "serial", label: "序号" }, { key: "in_syllabus", label: "是否书内" }
+            ]).map(({ key: field, label }) => (
+              <label key={field} className="import-map-row">
+                <span>{label}</span>
+                <select
+                  className="select-input"
+                  value={mapping[field] || ""}
+                  onChange={(event) => setMapping((prev) => ({ ...prev, [field]: event.target.value }))}
+                >
+                  <option value="">不映射</option>
+                  {preview.headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          <div className="custom-column-editor">
+            <div>
+              <strong>补充缺失字段</strong>
+              <span>创建自定义表头后，会为全部现有词条增加此列；可先批量填固定值，再在下方逐格修改。</span>
+            </div>
+            <input className="text-mini-input" placeholder="例如：难度 / 记忆备注" value={customHeader} onChange={(event) => setCustomHeader(event.target.value)} />
+            <input className="text-mini-input" placeholder="整列默认值（可留空）" value={customDefaultValue} onChange={(event) => setCustomDefaultValue(event.target.value)} />
+            <button type="button" className="secondary-btn" onClick={addCustomColumn}>添加自定义列</button>
+          </div>
+          <div className="editable-import-header">
+            <div>
+              <strong>待导入词条</strong>
+              <span>可直接修改或删除不需要的行；确认时以这里的内容为准，未映射列将保留为自定义信息。</span>
+            </div>
+          </div>
+          <div className="editable-import-table-wrap">
+            <table className="editable-import-table">
+              <thead>
+                <tr>
+                  {preview.headers.map((header) => <th key={header}>{header}</th>)}
+                  <th aria-label="操作">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editableRows.map((row, rowIndex) => (
+                  <tr key={`editable-row-${rowIndex}`}>
+                    {preview.headers.map((header, columnIndex) => (
+                      <td key={`${header}-${columnIndex}`}>
+                        <input
+                          className="editable-import-cell"
+                          value={row[columnIndex] ?? ""}
+                          onChange={(event) => updateEditableCell(rowIndex, columnIndex, event.target.value)}
+                          aria-label={`${header} 第 ${rowIndex + 1} 行`}
+                        />
+                      </td>
+                    ))}
+                    <td><button type="button" className="ghost-btn mini-ghost-btn" onClick={() => removeEditableRow(rowIndex)}>删除</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="upload-row">
+            <button type="button" className="primary-btn" onClick={handleConfirm} disabled={uploading || !mapping.lemma}>
+              {uploading ? "导入中..." : "确认创建主词库"}
+            </button>
+            <button type="button" className="ghost-btn" onClick={() => { setPreview(null); setEditableRows([]); }}>取消</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -692,7 +899,8 @@ function LibrarySelector({
   setIncludeExtra
 }) {
   const mainLibraries = libraries.filter((lib) => lib.type === "main");
-  const extra = libraries.find((lib) => lib.type === "extra");
+  const extras = libraries.filter((lib) => lib.type === "extra");
+  const extraCount = extras.reduce((total, library) => total + (library.count || 0), 0);
 
   const toggleLibrary = (id) => {
     if (selectedLibraryIds.includes(id)) {
@@ -734,7 +942,7 @@ function LibrarySelector({
           onChange={(event) => setIncludeExtra(event.target.checked)}
         />
         <span>包含补充词库</span>
-        <em>{extra?.count ?? 0} 词</em>
+        <em>{extraCount} 词 / {extras.length} 库</em>
       </label>
     </section>
   );
@@ -793,6 +1001,37 @@ function AnalysisSettings({
   );
 }
 
+function HomeConfigurationPage({
+  section,
+  libraries,
+  selectedLibraryIds,
+  setSelectedLibraryIds,
+  includeExtra,
+  setIncludeExtra,
+  analysisMode,
+  setAnalysisMode,
+  ignoreBasicWords,
+  setIgnoreBasicWords
+}) {
+  const isLibraries = section === "libraries";
+
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <div>
+          <h1>{isLibraries ? "参与分析词库" : "分析设置"}</h1>
+          <p>{isLibraries ? "选择本次阅读诊断所使用的词库。" : "调整阅读诊断的识别规则。"}</p>
+        </div>
+      </div>
+      {isLibraries ? (
+        <LibrarySelector libraries={libraries} selectedLibraryIds={selectedLibraryIds} setSelectedLibraryIds={setSelectedLibraryIds} includeExtra={includeExtra} setIncludeExtra={setIncludeExtra} />
+      ) : (
+        <AnalysisSettings analysisMode={analysisMode} setAnalysisMode={setAnalysisMode} ignoreBasicWords={ignoreBasicWords} setIgnoreBasicWords={setIgnoreBasicWords} />
+      )}
+    </div>
+  );
+}
+
 function StatsPanel({ stats, analysisMode }) {
   const outsideTitle = analysisMode === "strict" ? "超纲" : "词库外/未收录";
 
@@ -830,11 +1069,35 @@ function DetailSection({ title, fullWidth = false, children }) {
   );
 }
 
+function PronunciationSection({ ipa, audioUrl, word }) {
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window && word;
+  const speak = () => {
+    if (!canSpeak) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "en-US";
+    window.speechSynthesis.speak(utterance);
+  };
+  return (
+    <DetailSection title="发音">
+      <div className="detail-item"><span className="detail-item-label">音标</span><span className="ipa-text">{ipa || "暂无音标"}</span></div>
+      <div className="pronunciation-actions">
+        {audioUrl ? <audio controls preload="none" src={audioUrl}>当前浏览器不支持音频播放。</audio> : null}
+        <button type="button" className="ghost-btn mini-ghost-btn" onClick={speak} disabled={!canSpeak}>{canSpeak ? "浏览器朗读" : "暂无可用音频"}</button>
+      </div>
+      {!audioUrl ? <div className="detail-tip">未提供可靠音频链接，已保留音频字段并可使用浏览器朗读。</div> : null}
+    </DetailSection>
+  );
+}
+
 function AIWordResult({ result, wordMeta }) {
   if (!result) return null;
 
   const posDetails = normalizePosDetails(result);
   const derivatives = normalizeDerivativeDetails(result);
+  const libraryPos = wordMeta?.pos;
+  const libraryIpa = wordMeta?.ipa;
+  const audioUrl = result.audioUrl || wordMeta?.audioUrl;
 
   return (
     <div className="detail-grid">
@@ -851,7 +1114,8 @@ function AIWordResult({ result, wordMeta }) {
           <span className="detail-item-label">中文翻译</span>
           <span>{result.meaning || wordMeta?.meaning || "暂无"}</span>
         </div>
-      </DetailSection>
+        </DetailSection>
+        <PronunciationSection ipa={result.ipa || libraryIpa} audioUrl={audioUrl} word={result.word || wordMeta?.word} />
 
       <DetailSection title="词库信息">
         <div className="detail-item">
@@ -862,14 +1126,14 @@ function AIWordResult({ result, wordMeta }) {
               : wordMeta?.sourceText || wordMeta?.libraryName || "暂无"}
           </span>
         </div>
-        <div className="detail-item">
+        {wordMeta?.libraryType !== "extra" ? <div className="detail-item">
           <span className="detail-item-label">位置</span>
           <span>
             {wordMeta?.unit
               ? `${wordMeta.unit}${wordMeta.page ? ` / p.${wordMeta.page}` : ""}`
               : "暂无"}
           </span>
-        </div>
+        </div> : null}
         <div className="detail-item">
           <span className="detail-item-label">等级</span>
           <span>
@@ -878,10 +1142,10 @@ function AIWordResult({ result, wordMeta }) {
               : "暂无"}
           </span>
         </div>
-        <div className="detail-item">
+        {wordMeta?.libraryType !== "extra" ? <div className="detail-item">
           <span className="detail-item-label">书内频率</span>
           <span>{wordMeta?.frequencyText || "暂无"}</span>
-        </div>
+        </div> : null}
       </DetailSection>
 
       <DetailSection title="词性">
@@ -897,6 +1161,7 @@ function AIWordResult({ result, wordMeta }) {
             ))}
           </div>
         )}
+        {libraryPos ? <div className="detail-tip">词库导入词性：{libraryPos}</div> : null}
       </DetailSection>
 
       <DetailSection title="词频">
@@ -916,7 +1181,8 @@ function AIWordResult({ result, wordMeta }) {
           <div className="detail-list">
             {derivatives.map((item, index) => (
               <div key={`${item.word}-${index}`} className="derivative-row">
-                <strong>{item.word || "未命名"}</strong>
+                <div className="derivative-title"><strong>{item.word || "未命名"}</strong>{item.source === "ai" ? <span className="ai-source-badge">AI 补充</span> : null}</div>
+                {item.relation ? <span className="derivative-relation">{item.relation}</span> : null}
                 <span>{item.meaning || "暂无中文翻译"}</span>
               </div>
             ))}
@@ -945,7 +1211,8 @@ function WordDetailPanel({
   error,
   onQuery,
   onRefresh,
-  onClose
+  onClose,
+  onAddToExtra
 }) {
   if (!word) return null;
 
@@ -980,6 +1247,7 @@ function WordDetailPanel({
           >
             刷新
           </button>
+          {onAddToExtra ? <button type="button" className="secondary-btn mini-ghost-btn" onClick={onAddToExtra}>加入补充</button> : null}
           <button
             type="button"
             className="icon-btn"
@@ -994,6 +1262,15 @@ function WordDetailPanel({
       {error ? <div className="error-box">{error}</div> : null}
       {loading ? <div className="loading-inline">正在生成解析...</div> : null}
 
+      {!aiEntry?.data ? (
+        <div className="detail-grid">
+          <PronunciationSection ipa={word.ipa} audioUrl={word.audioUrl} word={word.word || word.lemma} />
+          {word.pos ? <DetailSection title="词性"><div className="detail-item"><span>{word.pos}</span></div></DetailSection> : null}
+        </div>
+      ) : null}
+      {word.locations?.length ? <DetailSection title="教材位置"><div className="tag-row">{word.locations.map((location, index) => <span key={`${location.unit}-${location.page}-${index}`} className="tag">{location.unit || "未标注单元"}{location.page ? ` · p.${location.page}` : ""}</span>)}</div></DetailSection> : null}
+      {word.customFields && Object.keys(word.customFields).length ? <DetailSection title="自定义字段"><div className="meta-list">{Object.entries(word.customFields).map(([key, value]) => <div key={key}><strong>{key}</strong><span>{String(value)}</span></div>)}</div></DetailSection> : null}
+
       {aiEntry?.data ? (
         <AIWordResult result={aiEntry.data} wordMeta={word} />
       ) : (
@@ -1005,16 +1282,7 @@ function WordDetailPanel({
   );
 }
 
-function ChatSidebar({
-  sessions,
-  selectedChatId,
-  onSelect,
-  onCreate,
-  onDelete,
-  settingsExpanded,
-  onToggleSettings,
-  settingsContent
-}) {
+function ChatSidebar({ sessions, selectedChatId, onSelect, onCreate, onDelete }) {
   const orderedSessions = [...sessions].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
@@ -1060,17 +1328,6 @@ function ChatSidebar({
             </button>
           </div>
         ))}
-      </div>
-
-      <div className="chat-settings-shell">
-        <button
-          type="button"
-          className="ghost-btn chat-settings-toggle"
-          onClick={onToggleSettings}
-        >
-          {settingsExpanded ? "收起 AI 设置" : "展开 AI 设置"}
-        </button>
-        {settingsExpanded ? settingsContent : null}
       </div>
     </aside>
   );
@@ -1211,7 +1468,9 @@ function HomePage({
   wordAiCache,
   fetchWordAi,
   clearWordAiCache,
-  aiSettings
+  aiSettings,
+  analysisMode,
+  ignoreBasicWords
 }) {
   const [text, setText] = useState("");
   const [tokens, setTokens] = useState([]);
@@ -1222,8 +1481,6 @@ function HomePage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [busyLemma, setBusyLemma] = useState("");
-  const [analysisMode, setAnalysisMode] = useState("friendly");
-  const [ignoreBasicWords, setIgnoreBasicWords] = useState(true);
   const [articleTranslation, setArticleTranslation] = useState("");
   const [articleTranslationLoading, setArticleTranslationLoading] = useState(false);
   const [articleTranslationMeta, setArticleTranslationMeta] = useState({
@@ -1300,6 +1557,9 @@ function HomePage({
   const selectedFocusAiEntry = selectedFocusAiKey
     ? wordAiCache[selectedFocusAiKey]
     : null;
+  const activeHomeDetail = selectedFocusDetail || selectedWordDetail;
+  const activeHomeAiKey = selectedFocusDetail ? selectedFocusAiKey : selectedWordAiKey;
+  const activeHomeAiEntry = selectedFocusDetail ? selectedFocusAiEntry : selectedWordAiEntry;
 
   const applyMark = (tokenId, mark) => {
     setTokens((prev) =>
@@ -1347,6 +1607,14 @@ function HomePage({
         key,
         word: selectedWordDetail.lemma || selectedWordDetail.word,
         context: text || null,
+        libraryContext: {
+          libraryName: selectedWordDetail.libraryName,
+          unit: selectedWordDetail.unit,
+          page: selectedWordDetail.page,
+          locations: selectedWordDetail.locations,
+          meaning: selectedWordDetail.meaning,
+          customFields: selectedWordDetail.customFields
+        },
         forceRefresh
       });
     } catch (error) {
@@ -1378,6 +1646,14 @@ function HomePage({
         key,
         word: selectedFocusDetail.lemma || selectedFocusDetail.word,
         context: text || null,
+        libraryContext: {
+          libraryName: selectedFocusDetail.libraryName,
+          unit: selectedFocusDetail.unit,
+          page: selectedFocusDetail.page,
+          locations: selectedFocusDetail.locations,
+          meaning: selectedFocusDetail.meaning,
+          customFields: selectedFocusDetail.customFields
+        },
         forceRefresh
       });
     } catch (error) {
@@ -1493,7 +1769,8 @@ function HomePage({
         word: word.lemma || word.displayText,
         level: word.suggestedLevel || 1,
         frequency: word.frequency === "high" ? "high" : "low",
-        meaning: word.meaning || null
+        meaning: word.meaning || null,
+        libraryId: null
       });
       await refreshLibraries();
       await runAnalyze();
@@ -1537,7 +1814,7 @@ function HomePage({
       <div className="page-header">
         <div>
           <h1>英语阅读词汇诊断 MVP</h1>
-          <p>上传词库，选择参与分析的词库，然后标记文章中的单词。</p>
+          <p>选择参与分析的词库，然后标记文章中的单词。</p>
         </div>
         <div className="header-actions">
           <button type="button" className="secondary-btn" onClick={handleLoadSample}>
@@ -1548,29 +1825,6 @@ function HomePage({
           </button>
         </div>
       </div>
-
-      <UploadPanel
-        libraries={libraries}
-        refreshLibraries={refreshLibraries}
-        selectedLibraryIds={selectedLibraryIds}
-        setSelectedLibraryIds={setSelectedLibraryIds}
-        setError={setError}
-      />
-
-      <LibrarySelector
-        libraries={libraries}
-        selectedLibraryIds={selectedLibraryIds}
-        setSelectedLibraryIds={setSelectedLibraryIds}
-        includeExtra={includeExtra}
-        setIncludeExtra={setIncludeExtra}
-      />
-
-      <AnalysisSettings
-        analysisMode={analysisMode}
-        setAnalysisMode={setAnalysisMode}
-        ignoreBasicWords={ignoreBasicWords}
-        setIgnoreBasicWords={setIgnoreBasicWords}
-      />
 
       <div className="layout-grid">
         <section className="panel">
@@ -1687,15 +1941,7 @@ function HomePage({
                   <button
                     key={token.id}
                     type="button"
-                    className={`word-token ${tokenClass} ${
-                      token.analysis
-                        ? token.analysis.outside
-                          ? "outline-outside"
-                          : token.analysis.libraryType === "extra"
-                          ? "outline-extra"
-                          : "outline-book"
-                        : ""
-                    } ${selectedTokenId === token.id ? "token-selected" : ""}`}
+                    className={`word-token ${tokenClass} ${selectedTokenId === token.id ? "token-selected" : ""}`}
                     title={buildTokenTitle(token)}
                     onMouseDown={(event) => {
                       event.preventDefault();
@@ -1715,18 +1961,6 @@ function HomePage({
               })
             )}
           </div>
-
-          {selectedWordDetail ? (
-            <WordDetailPanel
-              word={selectedWordDetail}
-              aiEntry={selectedWordAiEntry}
-              loading={wordDetailLoadingKey === selectedWordAiKey}
-              error={wordDetailError}
-              onQuery={() => handleWordDetailQuery(false)}
-              onRefresh={() => handleWordDetailQuery(true)}
-              onClose={() => setSelectedTokenId(null)}
-            />
-          ) : null}
 
           {analysis?.articleGlossaryText ? (
             <div className="glossary-box">
@@ -1786,19 +2020,6 @@ function HomePage({
                             点击卡片展开详情与 AI 解析
                           </div>
 
-                          {selected ? (
-                            <div onClick={(event) => event.stopPropagation()}>
-                              <WordDetailPanel
-                                word={selectedFocusDetail}
-                                aiEntry={selectedFocusAiEntry}
-                                loading={focusDetailLoadingKey === selectedFocusAiKey}
-                                error={focusDetailError}
-                                onQuery={() => handleFocusDetailQuery(false)}
-                                onRefresh={() => handleFocusDetailQuery(true)}
-                                onClose={() => setSelectedFocusKey("")}
-                              />
-                            </div>
-                          ) : null}
                         </div>
 
                         <div className="focus-side" onClick={(event) => event.stopPropagation()}>
@@ -1826,6 +2047,21 @@ function HomePage({
           )}
         </section>
       </div>
+
+      {activeHomeDetail ? (
+        <aside className="library-detail-drawer">
+          <WordDetailPanel
+            word={activeHomeDetail}
+            aiEntry={activeHomeAiEntry}
+            loading={wordDetailLoadingKey === activeHomeAiKey || focusDetailLoadingKey === activeHomeAiKey}
+            error={selectedFocusDetail ? focusDetailError : wordDetailError}
+            onQuery={() => selectedFocusDetail ? handleFocusDetailQuery(false) : handleWordDetailQuery(false)}
+            onRefresh={() => selectedFocusDetail ? handleFocusDetailQuery(true) : handleWordDetailQuery(true)}
+            onClose={() => { setSelectedTokenId(null); setSelectedFocusKey(""); }}
+            onAddToExtra={() => handleAddExtraWord(selectedFocusWord || activeHomeDetail)}
+          />
+        </aside>
+      ) : null}
     </div>
   );
 }
@@ -1853,6 +2089,7 @@ function BasicWhitelistPage() {
   const [inputValue, setInputValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
 
   const fetchBasicWords = async () => {
     setLoading(true);
@@ -1903,6 +2140,30 @@ function BasicWhitelistPage() {
     }
   };
 
+  const handleDelete = async (lemma) => {
+    if (!window.confirm(`确定从白名单移除“${lemma}”吗？`)) return;
+    try {
+      await postJson("/api/basic-words/delete", { words: [lemma] });
+      setMessage(`已移除 ${lemma}。`);
+      await fetchBasicWords();
+    } catch (error) {
+      setError(`移除失败：${error.message}`);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm("确定清空自定义基础词白名单吗？此操作不可恢复。")) return;
+    try {
+      await postJson("/api/basic-words/reset", {});
+      setMessage("基础词白名单已清空。");
+      await fetchBasicWords();
+    } catch (error) {
+      setError(`清空失败：${error.message}`);
+    }
+  };
+
+  const visibleWords = words.filter((word) => `${word.lemma} ${word.meaning || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+
   return (
     <section className="panel">
       <div className="panel-title">
@@ -1931,7 +2192,12 @@ function BasicWhitelistPage() {
       </div>
 
       <div className="upload-tips">
-        当前加入白名单的词不会删除。分析时若开启“忽略基础功能词”，这些词会按基础词处理。
+        分析时若开启“忽略基础功能词”，白名单中的词会按基础词处理。可随时检索、移除或清空。
+      </div>
+
+      <div className="search-filter-bar">
+        <input className="search-input" placeholder="搜索白名单单词或释义" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <button type="button" className="danger-btn" onClick={handleReset}>清空白名单</button>
       </div>
 
       {message ? <div className="success-box">{message}</div> : null}
@@ -1941,7 +2207,7 @@ function BasicWhitelistPage() {
         <div className="empty-state">加载中...</div>
       ) : (
         <div className="word-grid">
-          {words.map((word, index) => (
+          {visibleWords.map((word, index) => (
             <div
               key={`${word.lemma}-${index}`}
               className="vocab-card level-bg-0"
@@ -1950,6 +2216,7 @@ function BasicWhitelistPage() {
               <div className="vocab-word">{word.lemma}</div>
               <div className="vocab-meta">{word.meaning || "基础功能词"}</div>
               <div className="vocab-level">白名单</div>
+              <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => handleDelete(word.lemma)}>移除</button>
             </div>
           ))}
         </div>
@@ -1967,10 +2234,11 @@ function LibraryWordsPage({
   clearWordAiCache
 }) {
   const mainLibraries = libraries.filter((lib) => lib.type === "main");
-  const extraLibrary = libraries.find((lib) => lib.type === "extra");
+  const extraLibraries = libraries.filter((lib) => lib.type === "extra");
 
   const [viewMode, setViewMode] = useState("merged");
   const [selectedSingleLibraryId, setSelectedSingleLibraryId] = useState("");
+  const [selectedExtraLibraryId, setSelectedExtraLibraryId] = useState("");
   const [query, setQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -1987,8 +2255,11 @@ function LibraryWordsPage({
   const [selectedCardKey, setSelectedCardKey] = useState("");
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [reviewItems, setReviewItems] = useState([]);
+  const [reviewMessage, setReviewMessage] = useState("");
 
   const activeLibraryId = selectedSingleLibraryId || mainLibraries[0]?.id || "";
+  const activeExtraLibraryId = selectedExtraLibraryId || extraLibraries[0]?.id || "";
 
   useEffect(() => {
     if (!selectedSingleLibraryId && mainLibraries.length > 0) {
@@ -1997,14 +2268,21 @@ function LibraryWordsPage({
   }, [mainLibraries, selectedSingleLibraryId]);
 
   useEffect(() => {
+    if (!selectedExtraLibraryId && extraLibraries.length > 0) {
+      setSelectedExtraLibraryId(extraLibraries[0].id);
+    }
+  }, [extraLibraries, selectedExtraLibraryId]);
+
+  useEffect(() => {
     setPage(1);
-  }, [viewMode, selectedSingleLibraryId, query, levelFilter]);
+  }, [viewMode, selectedSingleLibraryId, selectedExtraLibraryId, query, levelFilter]);
 
   useEffect(() => {
     fetchWords();
   }, [
     viewMode,
     selectedSingleLibraryId,
+    selectedExtraLibraryId,
     query,
     levelFilter,
     page,
@@ -2037,7 +2315,7 @@ function LibraryWordsPage({
           `&includeExtra=false&includeBasic=false&page=${page}&pageSize=${PAGE_SIZE}` +
           `&query=${encodeURIComponent(query)}&levelFilter=${encodeURIComponent(levelFilter)}`;
       } else if (viewMode === "extra") {
-        if (!extraLibrary?.id) {
+        if (!activeExtraLibraryId) {
           setWordData({
             items: [],
             page: 1,
@@ -2050,7 +2328,7 @@ function LibraryWordsPage({
         }
 
         url =
-          `/api/libraries/${extraLibrary.id}/words?page=${page}&pageSize=${PAGE_SIZE}` +
+          `/api/libraries/${activeExtraLibraryId}/words?page=${page}&pageSize=${PAGE_SIZE}` +
           `&query=${encodeURIComponent(query)}&levelFilter=${encodeURIComponent(levelFilter)}`;
       } else {
         if (!activeLibraryId) {
@@ -2103,6 +2381,52 @@ function LibraryWordsPage({
     setDetailError("");
   };
 
+  const handleExport = () => {
+    const libraryId = viewMode === "single" ? activeLibraryId : viewMode === "extra" ? activeExtraLibraryId : "";
+    if (!libraryId) {
+      setError("请先切换到单个主词库或补充词库后导出。");
+      return;
+    }
+    window.open(`/api/libraries/${encodeURIComponent(libraryId)}/export`, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDeleteLibrary = async () => {
+    const libraryId = viewMode === "single" ? activeLibraryId : viewMode === "extra" ? activeExtraLibraryId : "";
+    if (!libraryId || (viewMode !== "single" && viewMode !== "extra")) {
+      setError("删除仅适用于当前选中的主词库或补充词库。");
+      return;
+    }
+    const library = [...mainLibraries, ...extraLibraries].find((item) => item.id === libraryId);
+    if (!window.confirm(`确定删除“${library?.name || "该词库"}”吗？此操作不可恢复。`)) return;
+    try {
+      await request(`/api/libraries/${encodeURIComponent(libraryId)}?confirm=DELETE`, { method: "DELETE" });
+      await refreshLibraries();
+      setSelectedCardKey("");
+    } catch (error) {
+      setError(`删除失败：${error.message}`);
+    }
+  };
+
+  const loadReview = async () => {
+    try {
+      const result = await getJson("/api/review/due?limit=12");
+      setReviewItems(result.items || []);
+      setReviewMessage(result.total ? `已加载 ${result.total} 个待复习词。` : "当前没有待复习词。");
+    } catch (error) {
+      setError(`加载复习失败：${error.message}`);
+    }
+  };
+
+  const markReview = async (word, mark) => {
+    try {
+      await postJson("/api/review/mark", { lemma: word.lemma, mark });
+      setReviewItems((prev) => prev.filter((item) => item.lemma !== word.lemma));
+      await fetchWords();
+    } catch (error) {
+      setError(`复习记录失败：${error.message}`);
+    }
+  };
+
   const selectedWord =
     wordData.items.find((word) => `${word.libraryId}-${word.lemma}` === selectedCardKey) ||
     null;
@@ -2127,12 +2451,36 @@ function LibraryWordsPage({
       await fetchWordAi({
         key,
         word: selectedWord.lemma,
+        libraryContext: {
+          libraryName: selectedWord.libraryName,
+          unit: selectedWord.unit,
+          page: selectedWord.page,
+          locations: selectedWord.locations,
+          meaning: selectedWord.meaning,
+          customFields: selectedWord.customFields
+        },
         forceRefresh
       });
     } catch (error) {
       setDetailError(`AI 解析失败：${error.message}`);
     } finally {
       setDetailLoadingKey("");
+    }
+  };
+
+  const handleAddDetailToExtra = async () => {
+    if (!selectedWord) return;
+    try {
+      await postJson("/api/extra-vocab/add", {
+        word: selectedWord.lemma,
+        frequency: selectedWordAiEntry?.data?.frequency || selectedWord.frequency,
+        meaning: selectedWordAiEntry?.data?.meaning || selectedWord.meaning || "",
+        libraryId: null
+      });
+      await refreshLibraries();
+      setReviewMessage(`已将 ${selectedWord.lemma} 加入补充词库。`);
+    } catch (error) {
+      setDetailError(`加入补充词库失败：${error.message}`);
     }
   };
 
@@ -2154,7 +2502,7 @@ function LibraryWordsPage({
           className={`tab-btn ${viewMode === "merged" ? "active" : ""}`}
           onClick={() => setViewMode("merged")}
         >
-          合并主词库
+          合并查看
         </button>
         <button
           type="button"
@@ -2186,6 +2534,20 @@ function LibraryWordsPage({
         </select>
       ) : null}
 
+      {viewMode === "extra" ? (
+        <select
+          className="select-input wide-select"
+          value={activeExtraLibraryId}
+          onChange={(event) => setSelectedExtraLibraryId(event.target.value)}
+        >
+          {extraLibraries.map((lib) => (
+            <option key={lib.id} value={lib.id}>
+              {lib.name}，{lib.count} 词
+            </option>
+          ))}
+        </select>
+      ) : null}
+
       <div className="search-filter-bar">
         <input
           className="search-input"
@@ -2207,7 +2569,22 @@ function LibraryWordsPage({
           <option value="stableish">6~11 较稳定</option>
           <option value="12">12 稳定</option>
         </select>
+        <button type="button" className="ghost-btn" onClick={handleExport}>导出当前词库</button>
+        {viewMode === "single" || viewMode === "extra" ? <button type="button" className="danger-btn" onClick={handleDeleteLibrary}>删除当前词库</button> : null}
+        <button type="button" className="secondary-btn" onClick={loadReview}>开始复习</button>
       </div>
+
+      {reviewMessage ? <div className="success-box">{reviewMessage}</div> : null}
+      {reviewItems.length ? (
+        <div className="review-strip">
+          {reviewItems.map((word) => (
+            <div key={`${word.libraryId}-${word.lemma}`} className="review-card">
+              <strong>{word.lemma}</strong><span>{word.meaning || "暂无释义"}</span>
+              <div><button type="button" className="mini-btn" onClick={() => markReview(word, "known")}>认识</button><button type="button" className="ghost-btn mini-ghost-btn" onClick={() => markReview(word, "fuzzy")}>模糊</button><button type="button" className="danger-btn mini-ghost-btn" onClick={() => markReview(word, "unknown")}>不认识</button></div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="panel-subtitle">掌握分布</div>
       <MasteryOverview overview={wordData.overview} />
@@ -2218,18 +2595,6 @@ function LibraryWordsPage({
           共 {wordData.total} 个，当前第 {wordData.page} / {wordData.totalPages} 页
         </span>
       </div>
-
-      {selectedWord ? (
-        <WordDetailPanel
-          word={selectedWord}
-          aiEntry={selectedWordAiEntry}
-          loading={detailLoadingKey === selectedWordAiKey}
-          error={detailError}
-          onQuery={() => handleWordDetailQuery(false)}
-          onRefresh={() => handleWordDetailQuery(true)}
-          onClose={() => setSelectedCardKey("")}
-        />
-      ) : null}
 
       {error ? <div className="error-box">{error}</div> : null}
       {loading ? <div className="empty-state">加载中...</div> : null}
@@ -2247,7 +2612,12 @@ function LibraryWordsPage({
                 className={`vocab-card clickable ${levelClass(word.level)} ${
                   selectedCardKey === cardKey ? "selected" : ""
                 }`}
-                title={`${word.lemma}
+                title={word.libraryType === "extra"
+                  ? `${word.lemma}
+词库：${word.libraryName || "补充词库"}
+等级：${word.level} ${word.levelLabel}
+词义：${word.meaning || ""}`
+                  : `${word.lemma}
 词库：${word.libraryName || ""}
 Unit：${word.unit || ""}
 页码：${word.page || ""}
@@ -2257,10 +2627,12 @@ Unit：${word.unit || ""}
                 onClick={() => handleSelectWord(word)}
               >
                 <div className="vocab-word">{word.lemma}</div>
-                <div className="vocab-meta">{word.unit || "无 Unit"}</div>
-                <div className="vocab-meta">
-                  {word.page ? `p.${word.page}` : "无页码"} · {word.frequencyText || "书低频"}
-                </div>
+                {word.libraryType === "extra" ? <div className="vocab-meta">补充词库</div> : <>
+                  <div className="vocab-meta">{word.unit || "无 Unit"}</div>
+                  <div className="vocab-meta">
+                    {word.page ? `p.${word.page}` : "无页码"} · {word.frequencyText || "暂无频率"}
+                  </div>
+                </>}
                 {word.meaning ? <div className="vocab-meta">{word.meaning}</div> : null}
                 <div className="vocab-level">
                   {word.level} · {word.levelLabel}
@@ -2292,159 +2664,241 @@ Unit：${word.unit || ""}
           下一页
         </button>
       </div>
+
+      {selectedWord ? (
+        <aside className="library-detail-drawer">
+          <WordDetailPanel
+            word={selectedWord}
+            aiEntry={selectedWordAiEntry}
+            loading={detailLoadingKey === selectedWordAiKey}
+            error={detailError}
+            onQuery={() => handleWordDetailQuery(false)}
+            onRefresh={() => handleWordDetailQuery(true)}
+            onClose={() => setSelectedCardKey("")}
+            onAddToExtra={handleAddDetailToExtra}
+          />
+        </aside>
+      ) : null}
+    </section>
+  );
+}
+
+function LibraryManagementPage({ libraries, defaultExtraLibraryId, refreshLibraries }) {
+  const mainLibraries = libraries.filter((library) => library.type === "main");
+  const extraLibraries = libraries.filter((library) => library.type === "extra");
+  const [firstSourceId, setFirstSourceId] = useState("");
+  const [secondSourceId, setSecondSourceId] = useState("");
+  const [mergedName, setMergedName] = useState("");
+  const [deleteSources, setDeleteSources] = useState(false);
+  const [newExtraName, setNewExtraName] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (mainLibraries.length < 2) return;
+    if (!mainLibraries.some((library) => library.id === firstSourceId)) setFirstSourceId(mainLibraries[0].id);
+    if (!mainLibraries.some((library) => library.id === secondSourceId) || secondSourceId === firstSourceId) setSecondSourceId(mainLibraries.find((library) => library.id !== firstSourceId)?.id || mainLibraries[1].id);
+  }, [mainLibraries, firstSourceId, secondSourceId]);
+
+  const complete = async (action, successMessage) => {
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await action();
+      await refreshLibraries();
+      setMessage(successMessage);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMerge = () => {
+    if (!firstSourceId || !secondSourceId || firstSourceId === secondSourceId) {
+      setError("请选择两个不同的主词库。");
+      return;
+    }
+    if (!mergedName.trim()) {
+      setError("请填写合并后词库名称。");
+      return;
+    }
+    if (deleteSources && !window.confirm("合并后将删除两个来源词库。确定继续吗？")) return;
+    complete(
+      () => postJson("/api/libraries/merge", { sourceLibraryIds: [firstSourceId, secondSourceId], name: mergedName, deleteSources }),
+      deleteSources ? "已实质合并并删除来源词库。" : "已创建合并后的新词库，原词库仍被保留。"
+    );
+  };
+
+  const handleCreateExtra = () => {
+    if (!newExtraName.trim()) {
+      setError("请填写补充词库名称。");
+      return;
+    }
+    complete(async () => {
+      await postJson("/api/extra-libraries", { name: newExtraName });
+      setNewExtraName("");
+    }, "已创建补充词库。");
+  };
+
+  const handleRename = (library) => {
+    const name = window.prompt("输入新的词库名称", library.name);
+    if (name == null || !name.trim() || name.trim() === library.name) return;
+    complete(() => request(`/api/libraries/${encodeURIComponent(library.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }), "词库名称已更新。");
+  };
+
+  const handleDefault = (library) => complete(
+    () => postJson("/api/extra-libraries/default", { libraryId: library.id }),
+    `已将“${library.name}”设为默认补充词库。`
+  );
+
+  const handleDelete = (library) => {
+    if (!window.confirm(`确定删除补充词库“${library.name}”吗？词条将一并删除。`)) return;
+    complete(() => request(`/api/libraries/${encodeURIComponent(library.id)}?confirm=DELETE`, { method: "DELETE" }), "补充词库已删除。");
+  };
+
+  return (
+    <section className="panel library-management-page">
+      <div className="page-header">
+        <div><h1>词库管理</h1><p>在此实质合并两个主词库，并维护多个补充词库与默认识别加入位置。</p></div>
+      </div>
+      {message ? <div className="success-box">{message}</div> : null}
+      {error ? <div className="error-box">{error}</div> : null}
+
+      <section className="management-section">
+        <div className="panel-title"><h2>实质合并主词库</h2><span>不会替代“合并查看”</span></div>
+        <p className="upload-tips">同一单词会合并教材位置与非空自定义字段；没有重复的词条会完整保留到新词库。</p>
+        {mainLibraries.length < 2 ? <div className="warning-box">至少需要两个主词库才能合并。</div> : <>
+          <div className="management-form-grid">
+            <select className="select-input" value={firstSourceId} onChange={(event) => setFirstSourceId(event.target.value)}>{mainLibraries.map((library) => <option key={library.id} value={library.id}>{library.name}，{library.count} 词</option>)}</select>
+            <select className="select-input" value={secondSourceId} onChange={(event) => setSecondSourceId(event.target.value)}>{mainLibraries.filter((library) => library.id !== firstSourceId).map((library) => <option key={library.id} value={library.id}>{library.name}，{library.count} 词</option>)}</select>
+            <input className="text-mini-input" placeholder="合并后词库名称" value={mergedName} onChange={(event) => setMergedName(event.target.value)} />
+          </div>
+          <label className="check-row management-check"><input type="checkbox" checked={deleteSources} onChange={(event) => setDeleteSources(event.target.checked)} /><span>合并成功后删除两个来源词库</span></label>
+          <button type="button" className="primary-btn" onClick={handleMerge} disabled={saving}>创建合并词库</button>
+        </>}
+      </section>
+
+      <section className="management-section">
+        <div className="panel-title"><h2>主词库</h2><span>{mainLibraries.length} 个</span></div>
+        <div className="management-library-list">
+          {mainLibraries.map((library) => <div key={library.id} className="management-library-row">
+            <div><strong>{library.name}</strong><span>{library.count} 词</span></div>
+            <div className="management-actions">
+              <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => handleRename(library)} disabled={saving}>改名</button>
+            </div>
+          </div>)}
+        </div>
+      </section>
+
+      <section className="management-section">
+        <div className="panel-title"><h2>补充词库</h2><span>{extraLibraries.length} 个</span></div>
+        <div className="upload-row">
+          <input className="text-mini-input" placeholder="新补充词库名称" value={newExtraName} onChange={(event) => setNewExtraName(event.target.value)} />
+          <button type="button" className="secondary-btn" onClick={handleCreateExtra} disabled={saving}>新建补充词库</button>
+        </div>
+        <div className="management-library-list">
+          {extraLibraries.map((library) => <div key={library.id} className="management-library-row">
+            <div><strong>{library.name}</strong><span>{library.count} 词 {library.id === defaultExtraLibraryId ? "· 默认识别加入位置" : ""}</span></div>
+            <div className="management-actions">
+              {library.id !== defaultExtraLibraryId ? <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => handleDefault(library)} disabled={saving}>设为默认</button> : <span className="tag">默认</span>}
+              <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => handleRename(library)} disabled={saving}>改名</button>
+              <button type="button" className="danger-btn mini-ghost-btn" onClick={() => handleDelete(library)} disabled={saving || library.id === defaultExtraLibraryId || extraLibraries.length <= 1}>删除</button>
+            </div>
+          </div>)}
+        </div>
+        <div className="upload-tips">默认补充词库不能删除；请先设定另一个默认库。至少保留一个补充词库。</div>
+      </section>
     </section>
   );
 }
 
 function LibraryPage({
   libraries,
+  defaultExtraLibraryId,
   refreshLibraries,
   needLibraryRefresh,
   wordAiCache,
   fetchWordAi,
-  clearWordAiCache
+  clearWordAiCache,
+  aiSettings
 }) {
-  const [subPage, setSubPage] = useState("libraries");
-
   return (
     <div className="page-content">
-      <div className="layout-grid library-layout-grid">
-        <section className="panel library-subnav-panel">
-          <div className="panel-title">
-            <h2>单词库模块</h2>
-            <span>下属模块</span>
-          </div>
-
-          <div className="library-subnav">
-            <button
-              type="button"
-              className={`tab-btn ${subPage === "libraries" ? "active" : ""}`}
-              onClick={() => setSubPage("libraries")}
-            >
-              词库总览
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${subPage === "basic" ? "active" : ""}`}
-              onClick={() => setSubPage("basic")}
-            >
-              基础词白名单
-            </button>
-          </div>
-        </section>
-
-        <div className="library-main-content">
-          {subPage === "libraries" ? (
-            <LibraryWordsPage
-              libraries={libraries}
-              refreshLibraries={refreshLibraries}
-              needLibraryRefresh={needLibraryRefresh}
-              wordAiCache={wordAiCache}
-              fetchWordAi={fetchWordAi}
-              clearWordAiCache={clearWordAiCache}
-            />
-          ) : (
-            <BasicWhitelistPage />
-          )}
-        </div>
-      </div>
+      <LibraryWordsPage
+        libraries={libraries}
+        refreshLibraries={refreshLibraries}
+        needLibraryRefresh={needLibraryRefresh}
+        wordAiCache={wordAiCache}
+        fetchWordAi={fetchWordAi}
+        clearWordAiCache={clearWordAiCache}
+      />
     </div>
   );
 }
 
 function AIChatPage({
   aiSettings,
-  setAiSettings,
-  providerOptions,
-  fieldHelp
+  providerOptions
 }) {
-  const [sessions, setSessions] = useState(() => {
-    const stored = readLocalStorageJson(CHAT_SESSIONS_STORAGE_KEY, []);
-    return Array.isArray(stored) && stored.length ? stored : [createChatSession(1)];
-  });
-  const [selectedChatId, setSelectedChatId] = useState(() => {
-    const stored = readLocalStorageJson(CHAT_SELECTED_STORAGE_KEY, "");
-    return stored || "";
-  });
+  const [sessions, setSessions] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState("");
   const [inputMessage, setInputMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
 
   useEffect(() => {
-    writeLocalStorageJson(CHAT_SESSIONS_STORAGE_KEY, sessions);
-  }, [sessions]);
-
-  useEffect(() => {
-    writeLocalStorageJson(CHAT_SELECTED_STORAGE_KEY, selectedChatId);
-  }, [selectedChatId]);
-
-  useEffect(() => {
-    if (!sessions.length) {
-      const first = createChatSession(1);
-      setSessions([first]);
-      setSelectedChatId(first.id);
-      return;
-    }
-
-    if (!sessions.some((session) => session.id === selectedChatId)) {
-      setSelectedChatId(sessions[0].id);
-    }
-  }, [sessions, selectedChatId]);
+    const loadSessions = async () => {
+      try {
+        const result = await getJson("/api/chat/sessions");
+        const loaded = result.sessions || [];
+        setSessions(loaded);
+        if (loaded[0]) setSelectedChatId(loaded[0].id);
+        else await handleCreateSession();
+      } catch (error) {
+        setError(`读取聊天记录失败：${error.message}`);
+      }
+    };
+    loadSessions();
+  }, []);
 
   const currentSession =
     sessions.find((session) => session.id === selectedChatId) || sessions[0] || null;
 
-  const updateSession = (sessionId, updater) => {
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId ? updater(session) : session
-      )
-    );
+  const loadSession = async (sessionId) => {
+    const result = await getJson(`/api/chat/sessions/${encodeURIComponent(sessionId)}`);
+    setSessions((prev) => prev.map((item) => item.id === sessionId ? result.session : item));
+    setSelectedChatId(sessionId);
   };
 
-  const handleCreateSession = () => {
-    const next = createChatSession(sessions.length + 1);
-    setSessions((prev) => [next, ...prev]);
-    setSelectedChatId(next.id);
-    setError("");
+  const handleCreateSession = async () => {
+    try {
+      const result = await postJson("/api/chat/sessions", { title: "新对话" });
+      setSessions((prev) => [result.session, ...prev]);
+      setSelectedChatId(result.session.id);
+      setError("");
+    } catch (error) { setError(`创建对话失败：${error.message}`); }
   };
 
-  const handleDeleteSession = (sessionId) => {
+  const handleDeleteSession = async (sessionId) => {
     const target = sessions.find((session) => session.id === sessionId);
     if (!target) return;
 
     const ok = window.confirm(`确定删除“${target.title}”吗？`);
     if (!ok) return;
 
-    const remaining = sessions.filter((session) => session.id !== sessionId);
-
-    if (remaining.length === 0) {
-      const fresh = createChatSession(1);
-      setSessions([fresh]);
-      setSelectedChatId(fresh.id);
-      setError("");
-      return;
-    }
-
-    setSessions(remaining);
-
-    if (selectedChatId === sessionId) {
-      setSelectedChatId(remaining[0].id);
-    }
-  };
-
-  const appendMessage = (sessionId, message, titleSource = "") => {
-    updateSession(sessionId, (session) => ({
-      ...session,
-      title:
-        session.messages.length === 0 && session.title.startsWith("新对话")
-          ? buildChatTitleFromMessage(titleSource || message.content, session.title)
-          : session.title,
-      updatedAt: message.updatedAt || new Date().toISOString(),
-      messages: [...session.messages, message]
-    }));
+    try {
+      await request(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+      const remaining = sessions.filter((session) => session.id !== sessionId);
+      setSessions(remaining);
+      if (selectedChatId === sessionId) {
+        if (remaining[0]) await loadSession(remaining[0].id);
+        else await handleCreateSession();
+      }
+    } catch (error) { setError(`删除对话失败：${error.message}`); }
   };
 
   const handleSend = async (forceRefresh = false) => {
@@ -2453,32 +2907,22 @@ function AIChatPage({
       return;
     }
 
-    const activeSession = currentSession || createChatSession(1);
-    const activeSessionId = activeSession.id;
-
     if (!currentSession) {
-      setSessions([activeSession]);
-      setSelectedChatId(activeSessionId);
+      setError("对话正在初始化，请稍后再试。");
+      return;
     }
+    const activeSession = currentSession;
+    const activeSessionId = activeSession.id;
 
     setLoading(true);
     setError("");
-
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: inputMessage,
-      files: selectedFiles.map((file) => ({ name: file.name })),
-      updatedAt: new Date().toISOString()
-    };
-
-    appendMessage(activeSessionId, userMessage, inputMessage);
 
     try {
       const formData = new FormData();
       formData.append("message", inputMessage);
       formData.append("forceRefresh", String(forceRefresh));
       formData.append("settingsJson", JSON.stringify(buildAISettingsPayload(aiSettings)));
+      formData.append("sessionId", activeSessionId);
 
       selectedFiles.forEach((file) => {
         formData.append("files", file);
@@ -2486,16 +2930,13 @@ function AIChatPage({
 
       const result = await postForm("/api/ai/chat", formData);
 
-      const assistantMessage = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        content: result.reply || "",
-        files: result.files || [],
-        cached: !!result.cached,
-        updatedAt: result.updatedAt || new Date().toISOString()
-      };
-
-      appendMessage(activeSessionId, assistantMessage);
+      await loadSession(activeSessionId);
+      const title = currentSession?.title || "新对话";
+      if (title === "新对话") {
+        const nextTitle = buildChatTitleFromMessage(inputMessage, title);
+        await request(`/api/chat/sessions/${encodeURIComponent(activeSessionId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: nextTitle }) });
+        await loadSession(activeSessionId);
+      }
       setInputMessage("");
       setSelectedFiles([]);
     } catch (error) {
@@ -2514,22 +2955,9 @@ function AIChatPage({
         <ChatSidebar
           sessions={sessions}
           selectedChatId={currentSession?.id || ""}
-          onSelect={setSelectedChatId}
+          onSelect={loadSession}
           onCreate={handleCreateSession}
           onDelete={handleDeleteSession}
-          settingsExpanded={settingsExpanded}
-          onToggleSettings={() => setSettingsExpanded((prev) => !prev)}
-          settingsContent={
-            <AISettingsPanel
-              aiSettings={aiSettings}
-              setAiSettings={setAiSettings}
-              providerOptions={providerOptions}
-              fieldHelp={fieldHelp}
-              embedded
-              title="AI 设置"
-              subtitle="已从首页迁移到这里"
-            />
-          }
         />
 
         <section className="panel chat-main-panel">
@@ -2560,11 +2988,35 @@ function AIChatPage({
   );
 }
 
+function AISettingsPage({ aiSettings, setAiSettings, providerOptions, fieldHelp }) {
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <div>
+          <h1>AI 设置</h1>
+          <p>配置 OpenAI 兼容服务。API Key 仅在当前浏览器会话中使用，不会保存到项目数据。</p>
+        </div>
+      </div>
+      <AISettingsPanel
+        aiSettings={aiSettings}
+        setAiSettings={setAiSettings}
+        providerOptions={providerOptions}
+        fieldHelp={fieldHelp}
+        title="AI 服务设置"
+        subtitle="设置后可用于单词解析、全文翻译和 AI 对话"
+      />
+    </div>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState("home");
   const [libraries, setLibraries] = useState([]);
+  const [defaultExtraLibraryId, setDefaultExtraLibraryId] = useState("");
   const [selectedLibraryIds, setSelectedLibraryIds] = useState([]);
   const [includeExtra, setIncludeExtra] = useState(true);
+  const [analysisMode, setAnalysisMode] = useState("friendly");
+  const [ignoreBasicWords, setIgnoreBasicWords] = useState(true);
   const [needLibraryRefresh, setNeedLibraryRefresh] = useState(0);
   const [providerOptions, setProviderOptions] = useState([]);
   const [fieldHelp, setFieldHelp] = useState({
@@ -2600,7 +3052,7 @@ export default function App() {
     });
   };
 
-  const fetchWordAi = async ({ key, word, context = null, forceRefresh = false }) => {
+  const fetchWordAi = async ({ key, word, context = null, libraryContext = null, forceRefresh = false }) => {
     const cacheKey = key || getWordAiKey({ lemma: word });
     if (!cacheKey) {
       throw new Error("无效单词。");
@@ -2617,6 +3069,7 @@ export default function App() {
     const result = await postJson("/api/ai/word-query", {
       word,
       context,
+      libraryContext,
       forceRefresh,
       settings: buildAISettingsPayload(aiSettings)
     });
@@ -2632,6 +3085,7 @@ export default function App() {
   const refreshLibraries = async () => {
     const result = await getJson("/api/libraries");
     setLibraries(result.libraries || []);
+    setDefaultExtraLibraryId(result.defaultExtraLibraryId || "");
 
     const mainLibraries = (result.libraries || []).filter((lib) => lib.type === "main");
 
@@ -2696,22 +3150,50 @@ export default function App() {
             fetchWordAi={fetchWordAi}
             clearWordAiCache={clearWordAiCache}
             aiSettings={aiSettings}
+            analysisMode={analysisMode}
+            ignoreBasicWords={ignoreBasicWords}
+          />
+        ) : activePage === "home-libraries" || activePage === "home-analysis" ? (
+          <HomeConfigurationPage
+            section={activePage === "home-libraries" ? "libraries" : "analysis"}
+            libraries={libraries}
+            selectedLibraryIds={selectedLibraryIds}
+            setSelectedLibraryIds={setSelectedLibraryIds}
+            includeExtra={includeExtra}
+            setIncludeExtra={setIncludeExtra}
+            analysisMode={analysisMode}
+            setAnalysisMode={setAnalysisMode}
+            ignoreBasicWords={ignoreBasicWords}
+            setIgnoreBasicWords={setIgnoreBasicWords}
           />
         ) : activePage === "library" ? (
           <LibraryPage
             libraries={libraries}
+            defaultExtraLibraryId={defaultExtraLibraryId}
             refreshLibraries={refreshLibraries}
             needLibraryRefresh={needLibraryRefresh}
             wordAiCache={wordAiCache}
             fetchWordAi={fetchWordAi}
             clearWordAiCache={clearWordAiCache}
+            aiSettings={aiSettings}
           />
-        ) : (
-          <AIChatPage
+        ) : activePage === "library-import" ? (
+          <div className="page-content"><UploadPanel libraries={libraries} refreshLibraries={refreshLibraries} selectedLibraryIds={[]} setSelectedLibraryIds={() => {}} aiSettings={aiSettings} /></div>
+        ) : activePage === "library-basic" ? (
+          <div className="page-content"><BasicWhitelistPage /></div>
+        ) : activePage === "library-manage" ? (
+          <div className="page-content"><LibraryManagementPage libraries={libraries} defaultExtraLibraryId={defaultExtraLibraryId} refreshLibraries={refreshLibraries} /></div>
+        ) : activePage === "ai-settings" ? (
+          <AISettingsPage
             aiSettings={aiSettings}
             setAiSettings={setAiSettings}
             providerOptions={providerOptions}
             fieldHelp={fieldHelp}
+          />
+        ) : (
+          <AIChatPage
+            aiSettings={aiSettings}
+            providerOptions={providerOptions}
           />
         )}
       </main>

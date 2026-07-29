@@ -1,0 +1,2 @@
+# This directory stores local SQLite databases, migration inputs, and backups.
+# Runtime data is intentionally excluded from version control.
