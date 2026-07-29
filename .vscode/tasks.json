@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Tauri release binary",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%&& cd /d src-tauri&& cargo build --release --bin reading-vocab-desktop"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build Tauri NSIS installer",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set PATH=%USERPROFILE%\\.cargo\\bin;%PATH%&& cd /d src-tauri&& ..\\frontend\\node_modules\\.bin\\tauri.cmd build --bundles nsis"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+try:
+    from .runtime_paths import DATA_DIR
+except ImportError:
+    from runtime_paths import DATA_DIR
+
 DB_PATH = DATA_DIR / "reading_vocab.sqlite3"
 
 

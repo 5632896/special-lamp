@@ -1,0 +1,12 @@
+[package]
+name = "reading-vocab-desktop"
+version = "1.0.0"
+description = "英语阅读工具桌面端"
+authors = [""]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const WORD_REGEX = /[A-Za-z]+(?:'[A-Za-z]+)?|[^A-Za-z\s]+|\s+/g;
 const REQUEST_TIMEOUT_MS = 20000;
 const PAGE_SIZE = 50;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const CHAT_FILE_ACCEPT =
   ".txt,.md,.csv,.json,.docx,.pdf,.xlsx,.py,.js,.ts,.jsx,.tsx,.html,.css,.xml,.yaml,.yml,.log";
 
@@ -66,7 +67,7 @@ async function request(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
       ...options,
       signal: controller.signal
     });
@@ -2387,7 +2388,7 @@ function LibraryWordsPage({
       setError("请先切换到单个主词库或补充词库后导出。");
       return;
     }
-    window.open(`/api/libraries/${encodeURIComponent(libraryId)}/export`, "_blank", "noopener,noreferrer");
+    window.open(`${API_BASE_URL}/api/libraries/${encodeURIComponent(libraryId)}/export`, "_blank", "noopener,noreferrer");
   };
 
   const handleDeleteLibrary = async () => {

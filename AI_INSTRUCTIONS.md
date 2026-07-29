@@ -9,8 +9,9 @@
 - 前端：React 18 + Vite 5，单页应用。
 - 后端：Python + FastAPI + Uvicorn。
 - 解析：`simplemma`、`openpyxl`、`python-docx`、`pypdf`。
-- 数据：**SQLite 主存储**，文件为 `backend/data/reading_vocab.sqlite3`。首次启动从旧 JSON 迁移，并将 JSON 复制到 `backend/data/json-backups/时间戳/`；JSON 不再是运行期主存储。
+- 数据：**SQLite 主存储**，源码模式文件为 `backend/data/reading_vocab.sqlite3`。首次启动从旧 JSON 迁移，并将 JSON 复制到 `backend/data/json-backups/时间戳/`；JSON 不再是运行期主存储。Windows 安装版改用 `%LOCALAPPDATA%\英语阅读工具\data`。
 - AI：标准库 `urllib` 调用 OpenAI 兼容 `POST {baseUrl}/chat/completions`。
+- 桌面端：**Tauri 2 + FastAPI sidecar**。Tauri 加载 React 静态页面，并自动启动/关闭经 PyInstaller 打包的 FastAPI sidecar；API 固定监听 `127.0.0.1:18432`。Windows 发布只使用已验证的 NSIS Setup `.exe`，不维护 MSI。用户数据绝不能写入安装目录、Tauri 资源目录或 PyInstaller 临时目录。
 
 ## 3. 核心模块
 
@@ -23,6 +24,10 @@
 | React 挂载 | `frontend/src/main.jsx` | 渲染 `App` |
 | Vite 配置 | `frontend/vite.config.js` | 开发端口 5173；`/api` 代理至 8000 |
 | 后端依赖 | `backend/requirements.txt` | Python 依赖 |
+| FastAPI sidecar | `backend/sidecar.py` | sidecar 进程入口，监听本机回环地址 |
+| Tauri 壳 | `src-tauri/src/main.rs` | 原生窗口、sidecar 自动启动和退出清理 |
+| Tauri 配置 | `src-tauri/tauri.conf.json` | 前端构建、sidecar 资源与 NSIS 打包配置 |
+| Sidecar 构建 | `scripts/build_tauri_sidecar.py` | 通过 PyInstaller 生成 Tauri 资源文件 |
 | 前端依赖 | `frontend/package.json` | npm 脚本与依赖 |
 
 ### 关键功能映射
@@ -58,7 +63,7 @@
 2. 拆分 `backend/main.py` 与 `frontend/src/App.jsx`，为上传、分析、AI、存储建立测试。
 3. 为 SQLite 存储添加自动化 API/迁移回归测试，并逐步拆分 `main.py` 与 `App.jsx`。
 4. 增加自动化 API/迁移回归测试，并评估补充词库条目编辑和更细致的复习算法。
-5. 补充 CI、错误监控和生产部署流程；**不要实现桌面/移动打包、安装包、Tauri 或 Capacitor（阶段 9 不在范围内）**。
+5. 补充 CI、错误监控和发布流程；每次桌面端发布均上传 NSIS Setup `.exe` 到 Gitee Release 附件。Tauri Windows 桌面端已纳入本阶段，移动端与 Capacitor 仍不在当前范围内。
 
 ## 7. 目录结构
 
@@ -66,6 +71,7 @@
 backend/
   main.py                  # FastAPI 全部后端逻辑
   storage.py               # SQLite 持久化与 JSON 迁移
+  runtime_paths.py         # 源码/安装版资源与用户数据目录
   requirements.txt
   data/                    # SQLite 主数据、JSON 迁移来源与备份
 frontend/
@@ -76,6 +82,12 @@ frontend/
     App.jsx                # 全部前端页面/组件
     main.jsx
     styles.css
+scripts/
+  build_tauri_sidecar.py   # 生成 FastAPI sidecar
+src-tauri/
+  src/main.rs              # Tauri 窗口与 sidecar 生命周期
+  resources/               # 打包后的 FastAPI sidecar 资源
+  tauri.conf.json          # Tauri Windows 安装包配置
 ```
 
 ## 8. 常用开发命令
@@ -88,6 +100,9 @@ frontend/
 - 前端开发：进入 `frontend` 后执行 `npm run dev`
 - 前端构建：进入 `frontend` 后执行 `npm run build`
 - 前端预览：进入 `frontend` 后执行 `npm run preview`
+- FastAPI sidecar 构建：`python scripts/build_tauri_sidecar.py`
+- Tauri Windows 安装程序构建：进入 `src-tauri` 后执行 `..\\frontend\\node_modules\\.bin\\tauri.cmd build --bundles nsis`
+- 发布附件：只上传 `release/desktop/英语阅读工具_1.0.0_x64-setup.exe`；不要上传 MSI、`target` 缓存或解压版目录。
 - Git 状态：`git status`
 - Git 提交：`git add .`，再执行 `git commit -m "说明"`
 - Git 推送：`git push gitee main`

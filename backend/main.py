@@ -19,12 +19,14 @@ from typing import Literal
 import simplemma
 from docx import Document
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from openpyxl import load_workbook
 from pydantic import BaseModel
 from pypdf import PdfReader
 try:
+    from .runtime_paths import DATA_DIR, FRONTEND_DIST_DIR
     from .storage import (
         append_chat_message, create_chat_session, delete_chat_session, get_chat_session,
         clear_review_schedules, get_due_review_schedules, get_review_schedule, initialize as initialize_storage,
@@ -36,6 +38,7 @@ try:
         save_setting as sqlite_save_setting, save_user_status as sqlite_save_user_status,
     )
 except ImportError:
+    from runtime_paths import DATA_DIR, FRONTEND_DIST_DIR
     from storage import (
         append_chat_message, create_chat_session, delete_chat_session, get_chat_session,
         clear_review_schedules, get_due_review_schedules, get_review_schedule, initialize as initialize_storage,
@@ -46,9 +49,6 @@ except ImportError:
         save_ai_cache as sqlite_save_ai_cache, save_libraries as sqlite_save_libraries,
         save_setting as sqlite_save_setting, save_user_status as sqlite_save_user_status,
     )
-
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
 
 LIBRARIES_PATH = DATA_DIR / "vocab_libraries.json"
 USER_STATUS_PATH = DATA_DIR / "user_vocab_status.json"
@@ -2774,6 +2774,24 @@ def reset_user_status():
         "message": "认识情况已重置。",
         "overview": build_mastery_overview(),
     }
+
+
+# The Vite development server owns the frontend in source mode. Packaged desktop
+# builds bundle frontend/dist as frontend_dist and are served by this FastAPI app.
+if FRONTEND_DIST_DIR.is_dir():
+    frontend_assets_dir = FRONTEND_DIST_DIR / "assets"
+    if frontend_assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=frontend_assets_dir), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    def desktop_frontend_index():
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    def desktop_frontend_fallback(frontend_path: str):
+        if frontend_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="接口不存在。")
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
 
 
 @app.post("/api/extra-vocab/add")

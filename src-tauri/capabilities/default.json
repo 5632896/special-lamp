@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "英语阅读工具主窗口的基础权限。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

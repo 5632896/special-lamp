@@ -21,6 +21,13 @@ __pycache__/
 *.py[cod]
 frontend/node_modules/
 frontend/dist/
+build/
+dist/
+release/
+src-tauri/target/
+src-tauri/resources/vocab-api.exe
 
 # Editor files
 .vscode/launch.json
+
+src-tauri/gen/

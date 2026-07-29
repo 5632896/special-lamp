@@ -90,6 +90,34 @@ Windows PowerShell 示例：`$env:AI_API_KEY="你的新密钥"`。macOS/Linux �
 
 建议定期备份该目录，以保留个人词库和学习进度。
 
+### Windows 安装版数据位置
+
+安装版「英语阅读工具」会将 SQLite、迁移备份、个人词库和本地设置保存在 `%LOCALAPPDATA%\英语阅读工具\data`，而不是安装目录。因此升级或卸载应用不会默认清除学习数据；如需迁移或备份，请复制整个该目录。
+
+## 构建 Windows 安装程序
+
+构建机器需要 Node.js、Python 3.10+、Rust stable、Visual Studio C++ 生成工具与 Windows 10/11 SDK。以下步骤在项目根目录执行：
+
+1. 在后端虚拟环境安装 PyInstaller：`pip install pyinstaller`。
+2. 执行 `python scripts/build_tauri_sidecar.py`，生成 Tauri 随应用分发的 FastAPI sidecar。
+3. 进入 `frontend`，执行 `npm install` 安装 Tauri CLI 与前端依赖。
+4. 确保 `NSIS` 已安装并可在 `PATH` 中找到，用于生成 Setup `.exe`。
+5. 进入 `src-tauri` 目录，执行 `..\\frontend\\node_modules\\.bin\\tauri.cmd build --bundles nsis`。
+6. 构建产物先生成在 `src-tauri/target/release/bundle/nsis/`；确认后复制 Setup `.exe` 到项目一级发布目录 `release/desktop/`，再作为 Gitee Release 附件上传。
+
+本项目当前只发布经过验证的 **NSIS Setup `.exe`**，不发布 MSI。不要将 `src-tauri/target/`、`target-msi/`、构建日志或解压版目录作为 Release 附件。
+
+### 分发给其他用户
+
+当前 Windows x64 的推荐分发文件是 `英语阅读工具_1.0.0_x64-setup.exe`。下载者只需运行安装程序，不需要安装或配置 Node.js、React、Python、FastAPI、Rust、SQLite 或数据库服务。
+
+- 推荐将该文件上传到 Gitee 的 Release 附件，不要提交进 Git 历史；发布说明应注明“Windows x64、NSIS 安装程序”。
+- 安装版会包含前端、Tauri 壳和 FastAPI sidecar；后端只监听本机 `127.0.0.1:18432`。
+- 用户词库和 SQLite 数据会写入 `%LOCALAPPDATA%\\英语阅读工具\\data`，升级或卸载程序不会默认删除这些数据。
+- AI 功能需由用户自行配置自己的 API Key；密钥不会包含在发布包中。
+
+安装版使用 Tauri 提供原生窗口，并自动启动 FastAPI sidecar。sidecar 仅监听本机回环地址 `127.0.0.1:18432`，不会开放局域网服务端口，也不会自动打开浏览器；关闭应用时 Tauri 会终止 sidecar 进程。
+
 ## 开发者运行源码
 
 源码模式需要分别启动后端和前端，因此需要已安装 Python 与 Node.js。
