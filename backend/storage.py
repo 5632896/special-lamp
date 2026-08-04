@@ -19,6 +19,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _read_json_value(value: str | None, default: Any) -> Any:
+    try:
+        parsed = json.loads(value or "")
+        return parsed
+    except (TypeError, json.JSONDecodeError):
+        return default
+
+
 def _connect() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
@@ -35,7 +43,9 @@ def initialize() -> None:
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 type TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                display_config_json TEXT NOT NULL DEFAULT '{}',
+                field_definitions_json TEXT NOT NULL DEFAULT '[]'
             );
             CREATE TABLE IF NOT EXISTS vocab_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,6 +113,11 @@ def initialize() -> None:
             CREATE INDEX IF NOT EXISTS idx_review_due ON review_schedule(due_at);
             """
         )
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(libraries)").fetchall()}
+        if "display_config_json" not in columns:
+            conn.execute("ALTER TABLE libraries ADD COLUMN display_config_json TEXT NOT NULL DEFAULT '{}'")
+        if "field_definitions_json" not in columns:
+            conn.execute("ALTER TABLE libraries ADD COLUMN field_definitions_json TEXT NOT NULL DEFAULT '[]'")
 
 
 def _entry_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
@@ -143,6 +158,8 @@ def load_libraries() -> list[dict[str, Any]]:
             result.append({
                 "id": library["id"], "name": library["name"], "type": library["type"],
                 "createdAt": library["created_at"],
+                "displayConfig": _read_json_value(library["display_config_json"], {}),
+                "fieldDefinitions": _read_json_value(library["field_definitions_json"], []),
                 "entries": [_entry_from_row(conn, row) for row in rows],
             })
         return result
@@ -157,9 +174,11 @@ def save_libraries(libraries: list[dict[str, Any]]) -> None:
             if not library_id:
                 continue
             conn.execute(
-                "INSERT INTO libraries(id, name, type, created_at) VALUES (?, ?, ?, ?)",
+                 "INSERT INTO libraries(id, name, type, created_at, display_config_json, field_definitions_json) VALUES (?, ?, ?, ?, ?, ?)",
                 (library_id, str(library.get("name") or "未命名词库"), str(library.get("type") or "main"),
-                 str(library.get("createdAt") or now_iso())),
+                  str(library.get("createdAt") or now_iso()),
+                  json.dumps(library.get("displayConfig") or {}, ensure_ascii=False),
+                  json.dumps(library.get("fieldDefinitions") or [], ensure_ascii=False)),
             )
             for order, source in enumerate(library.get("entries") or []):
                 lemma = str(source.get("lemma") or "").strip().lower()

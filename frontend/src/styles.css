@@ -21,6 +21,27 @@ input {
   font: inherit;
 }
 
+.selectable-copy,
+.setting-help-text,
+.radio-row em,
+.check-row span,
+.check-row em,
+.focus-word,
+.focus-meta,
+.vocab-word,
+.vocab-meta,
+.vocab-level,
+.word-detail-panel .detail-item,
+.word-detail-panel .detail-tip {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.focus-card .selectable-copy,
+.vocab-card.clickable .selectable-copy {
+  cursor: text;
+}
+
 .app-layout {
   display: flex;
   min-height: 100vh;
@@ -480,7 +501,7 @@ input {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 2;
-  user-select: none;
+  user-select: text;
 }
 
 .empty-state,
@@ -510,6 +531,7 @@ input {
   vertical-align: top;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
   overflow: hidden;
+  user-select: text;
 }
 
 .word-token:hover {
@@ -715,6 +737,57 @@ input {
   grid-column: 2;
   color: #64748b;
   font-style: normal;
+  font-size: 13px;
+}
+
+.display-field-group {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.display-field-group .check-row input[type="text"],
+.display-field-group .check-row input:not([type]) {
+  min-width: 120px;
+}
+
+.mapping-definition-list {
+  display: grid;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
+.mapping-definition-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+}
+
+.mapping-definition-row span:first-child {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.mapping-definition-row .text-mini-input,
+.mapping-definition-row .select-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.pagination-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #64748b;
   font-size: 13px;
 }
 

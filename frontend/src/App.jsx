@@ -48,6 +48,13 @@ const LEVEL_LABEL = {
   12: "稳定"
 };
 
+const DEFAULT_DETAIL_FIELDS = [
+  { key: "meaning", label: "释义", source: "meaning", enabled: true, showEmpty: false },
+  { key: "unit", label: "单元", source: "unit", enabled: true, showEmpty: false },
+  { key: "page", label: "页码", source: "page", enabled: true, showEmpty: false },
+  { key: "frequency", label: "频率", source: "frequencyText", enabled: true, showEmpty: false }
+];
+
 const SAMPLE_TEXT =
   "Students are discussing how climate change affects the ecosystem of a coastal city. Scientists hope the government will protect the environment, reduce pollution, and explore renewable energy solutions so more species can survive.";
 
@@ -108,6 +115,14 @@ function postJson(url, body) {
   });
 }
 
+function putJson(url, body) {
+  return request(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
 function postForm(url, formData) {
   return request(
     url,
@@ -124,26 +139,58 @@ function levelClass(level) {
   return `level-bg-${n}`;
 }
 
-function buildTokenTitle(token) {
+function buildTokenTitle(token, displayConfig) {
   if (!token.analysis) return "";
   const item = token.analysis;
 
-  const parts = [
-    item.lemma ? `lemma: ${item.lemma}` : "",
-    item.sourceText ? `来源: ${item.sourceText}` : "",
-    item.unit ? `Unit: ${item.unit}` : "",
-    item.page ? `页码: ${item.page}` : "",
-    item.frequencyText ? `频率: ${item.frequencyText}` : "",
-    item.basicIgnored ? "基础词" : "",
-    item.outside ? item.outsideText : "",
-    typeof item.level !== "undefined" ? `等级: L${item.level} ${item.levelLabel}` : "",
-    item.meaning ? `词义: ${item.meaning}` : ""
-  ].filter(Boolean);
-
-  return parts.join("\n");
+  const lines = buildConfiguredFields(item, displayConfig?.tooltipFields, "\n");
+  if (!lines && item.basicIgnored) {
+    return "基础词";
+  }
+  if (!lines && item.outside) {
+    return item.outsideText || "";
+  }
+  return lines;
 }
 
-function buildTokenMiniInfo(token) {
+function resolveDisplayValue(item, source) {
+  if (!item || !source) return "";
+  if (source.startsWith("customFields.")) {
+    return item.customFields?.[source.slice("customFields.".length)] ?? "";
+  }
+  return item[source] ?? "";
+}
+
+function buildConfiguredFields(item, fields, separator = " · ") {
+  return (fields || [])
+    .filter((field) => field.enabled)
+    .map((field) => {
+      const value = resolveDisplayValue(item, field.source);
+      return value || field.showEmpty ? `${field.label}: ${value || "-"}` : "";
+    })
+    .filter(Boolean)
+    .join(separator);
+}
+
+async function copyText(text) {
+  if (!text) return;
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function hasTextSelection() {
+  return typeof window !== "undefined" && !!window.getSelection?.().toString().trim();
+}
+
+function buildTokenMiniInfo(token, displayConfig) {
   if (!token.analysis) return "";
   const item = token.analysis;
 
@@ -155,57 +202,17 @@ function buildTokenMiniInfo(token) {
     return item.outsideText;
   }
 
-  const parts = [];
-
-  if (item.unit && item.page) {
-    parts.push(`${item.unit}/p.${item.page}`);
-  } else if (item.unit) {
-    parts.push(item.unit);
-  }
-
-  if (item.libraryType === "extra") {
-    parts.push(item.sourceText || "补充词库");
-    return parts.join(" · ");
-  }
-
-  if (item.frequencyText) {
-    parts.push(item.frequencyText);
-  }
-
-  return parts.join(" · ");
+  return buildConfiguredFields(item, displayConfig?.tokenFields);
 }
 
-function buildTokenMeaning(token) {
-  if (!token.analysis?.meaning) return "";
-  return token.analysis.meaning;
+function buildTokenMeaning(token, displayConfig) {
+  return buildConfiguredFields(token.analysis, (displayConfig?.tokenFields || []).filter((field) => field.source === "meaning"), " ");
 }
 
-function buildFocusMeta(word) {
-  const parts = [];
-
-  if (word.libraryName) {
-    parts.push(word.libraryName);
-  }
-
-  if (word.libraryType !== "extra" && word.unit && word.page) {
-    parts.push(`${word.unit} / p.${word.page}`);
-  } else if (word.libraryType !== "extra" && word.unit) {
-    parts.push(word.unit);
-  }
-
-  if (word.outside) {
-    parts.push(word.outsideText);
-  } else if (word.libraryType === "extra") {
-    parts.push("补充词库");
-  } else {
-    parts.push("主词库");
-  }
-
-  if (word.libraryType !== "extra" && word.frequencyText) {
-    parts.push(word.frequencyText);
-  }
-
-  return parts.join(" · ");
+function buildFocusMeta(word, displayConfig) {
+  const limit = Math.max(1, Math.min(12, Number(displayConfig?.focusFieldLimit) || 5));
+  const fields = (displayConfig?.focusFields || []).filter((field) => field.enabled).slice(0, limit);
+  return buildConfiguredFields(word, fields);
 }
 
 function buildAISettingsPayload(aiSettings) {
@@ -662,14 +669,18 @@ function UploadPanel({
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const [mapping, setMapping] = useState({});
+  const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [editableRows, setEditableRows] = useState([]);
+  const [previewPage, setPreviewPage] = useState(0);
   const [customHeader, setCustomHeader] = useState("");
   const [customDefaultValue, setCustomDefaultValue] = useState("");
 
   const applyDraft = (result, message) => {
     setPreview(result);
     setMapping(result.mapping || {});
+    setFieldDefinitions(result.fieldDefinitions || []);
     setEditableRows((result.rows || []).map((row) => [...row]));
+    setPreviewPage(0);
     setMessage(message || result.message || "请确认字段映射和词条内容。");
   };
 
@@ -727,7 +738,8 @@ function UploadPanel({
         libraryName: libraryName || selectedFile?.name?.replace(/\.[^.]+$/, "") || "未命名词库",
         headers: preview.headers,
         rows: editableRows,
-        mapping
+        mapping,
+        fieldDefinitions
       });
       await refreshLibraries();
       if (result.library?.id) {
@@ -736,6 +748,7 @@ function UploadPanel({
       setMessage(`导入成功：${result.library.name}，共 ${result.importedCount} 个词条。`);
       setPreview(null);
       setMapping({});
+      setFieldDefinitions([]);
       setEditableRows([]);
       setLibraryName("");
       setSelectedFile(null);
@@ -747,6 +760,8 @@ function UploadPanel({
   };
 
   const mainCount = libraries.filter((lib) => lib.type === "main").length;
+  const previewPageCount = Math.max(1, Math.ceil(editableRows.length / PAGE_SIZE));
+  const pagedRows = editableRows.slice(previewPage * PAGE_SIZE, (previewPage + 1) * PAGE_SIZE);
 
   const updateEditableCell = (rowIndex, columnIndex, value) => {
     setEditableRows((prev) => prev.map((row, currentRowIndex) => {
@@ -774,6 +789,21 @@ function UploadPanel({
     setCustomHeader("");
     setCustomDefaultValue("");
     setError("");
+  };
+
+  const addMappingField = () => {
+    setFieldDefinitions((prev) => [...prev, {
+      key: `field_${prev.length + 1}`,
+      label: "新增字段",
+      sourceHeader: preview.headers[0] || ""
+    }]);
+    setError("");
+  };
+
+  const updateMappingField = (index, property, value) => {
+    setFieldDefinitions((prev) => prev.map((field, fieldIndex) => (
+      fieldIndex === index ? { ...field, [property]: value } : field
+    )));
   };
 
   return (
@@ -814,7 +844,7 @@ function UploadPanel({
         <div className="import-preview">
           <div className="panel-title compact">
             <h2>预处理与字段映射</h2>
-            <span>仅单词必填；单次最多 300 行</span>
+            <span>仅单词必填；文件最大 5 MB</span>
           </div>
           <div className="import-map-grid">
             {(preview.mappingFields || [
@@ -840,6 +870,28 @@ function UploadPanel({
           </div>
           <div className="custom-column-editor">
             <div>
+              <strong>新增可映射字段</strong>
+              <span>从实际表头选择源列，给它设置名称和保存字段。例如“词频次数”可与预设“频率”同时映射、分别显示。</span>
+            </div>
+            <button type="button" className="secondary-btn" onClick={addMappingField}>添加映射字段</button>
+            {fieldDefinitions.length ? (
+              <div className="mapping-definition-list">
+                {fieldDefinitions.map((field, index) => (
+                  <div key={`${field.key}-${index}`} className="mapping-definition-row">
+                    <input className="text-mini-input" aria-label="字段显示名称" value={field.label || ""} onChange={(event) => updateMappingField(index, "label", event.target.value)} placeholder="显示名称，例如：词频次数" />
+                    <select className="select-input" aria-label="字段源列" value={field.sourceHeader || field.source || ""} onChange={(event) => updateMappingField(index, "sourceHeader", event.target.value)}>
+                      <option value="">请选择源列</option>
+                      {preview.headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                    </select>
+                    <input className="text-mini-input" aria-label="保存字段名" value={field.key || ""} onChange={(event) => updateMappingField(index, "key", event.target.value)} placeholder="保存字段名，例如 frequency_count" />
+                    <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => setFieldDefinitions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}>删除</button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="custom-column-editor">
+            <div>
               <strong>补充缺失字段</strong>
               <span>创建自定义表头后，会为全部现有词条增加此列；可先批量填固定值，再在下方逐格修改。</span>
             </div>
@@ -862,8 +914,9 @@ function UploadPanel({
                 </tr>
               </thead>
               <tbody>
-                {editableRows.map((row, rowIndex) => (
-                  <tr key={`editable-row-${rowIndex}`}>
+                {pagedRows.map((row, pageRowIndex) => {
+                  const rowIndex = previewPage * PAGE_SIZE + pageRowIndex;
+                  return <tr key={`editable-row-${rowIndex}`}>
                     {preview.headers.map((header, columnIndex) => (
                       <td key={`${header}-${columnIndex}`}>
                         <input
@@ -875,10 +928,15 @@ function UploadPanel({
                       </td>
                     ))}
                     <td><button type="button" className="ghost-btn mini-ghost-btn" onClick={() => removeEditableRow(rowIndex)}>删除</button></td>
-                  </tr>
-                ))}
+                  </tr>;
+                })}
               </tbody>
             </table>
+          </div>
+          <div className="pagination-row">
+            <span>第 {previewPage + 1} / {previewPageCount} 页，共 {editableRows.length} 行</span>
+            <button type="button" className="ghost-btn mini-ghost-btn" disabled={previewPage === 0} onClick={() => setPreviewPage((page) => page - 1)}>上一页</button>
+            <button type="button" className="ghost-btn mini-ghost-btn" disabled={previewPage >= previewPageCount - 1} onClick={() => setPreviewPage((page) => page + 1)}>下一页</button>
           </div>
           <div className="upload-row">
             <button type="button" className="primary-btn" onClick={handleConfirm} disabled={uploading || !mapping.lemma}>
@@ -953,8 +1011,119 @@ function AnalysisSettings({
   analysisMode,
   setAnalysisMode,
   ignoreBasicWords,
-  setIgnoreBasicWords
+  setIgnoreBasicWords,
+  libraries,
+  displayConfig,
+  setDisplayConfig,
+  refreshLibraries
 }) {
+  const DISPLAY_GROUPS = ["tokenFields", "tooltipFields", "focusFields", "detailFields"];
+  const DEFAULT_FIELDS = {
+    tokenFields: [
+      { key: "meaning", label: "释义", source: "meaning", enabled: true, showEmpty: false },
+      { key: "unit", label: "单元", source: "unit", enabled: true, showEmpty: false },
+      { key: "page", label: "页码", source: "page", enabled: true, showEmpty: false },
+      { key: "frequency", label: "频率", source: "frequencyText", enabled: true, showEmpty: false }
+    ],
+    tooltipFields: [
+      { key: "lemma", label: "词形", source: "lemma", enabled: true, showEmpty: false },
+      { key: "basicText", label: "基础词", source: "basicText", enabled: true, showEmpty: false },
+      { key: "outsideText", label: "词库外", source: "outsideText", enabled: true, showEmpty: false },
+      { key: "sourceText", label: "来源", source: "sourceText", enabled: true, showEmpty: false },
+      { key: "unit", label: "单元", source: "unit", enabled: true, showEmpty: false },
+      { key: "page", label: "页码", source: "page", enabled: true, showEmpty: false },
+      { key: "frequencyText", label: "频率", source: "frequencyText", enabled: true, showEmpty: false },
+      { key: "level", label: "掌握等级", source: "levelLabel", enabled: true, showEmpty: false },
+      { key: "meaning", label: "词义", source: "meaning", enabled: true, showEmpty: false }
+    ],
+    focusFields: [
+      { key: "meaning", label: "释义", source: "meaning", enabled: true, showEmpty: false },
+      { key: "libraryName", label: "词库", source: "libraryName", enabled: true, showEmpty: false },
+      { key: "unit", label: "单元", source: "unit", enabled: true, showEmpty: false },
+      { key: "page", label: "页码", source: "page", enabled: true, showEmpty: false },
+      { key: "frequency", label: "频率", source: "frequencyText", enabled: true, showEmpty: false }
+    ],
+    detailFields: DEFAULT_DETAIL_FIELDS,
+    focusFieldLimit: 5
+  };
+  const buildDraftFromConfig = (config) => {
+    const source = config || {};
+    return Object.fromEntries([
+      ...DISPLAY_GROUPS.map((group) => [
+        group,
+        Array.isArray(source[group]) && source[group].length ? source[group] : DEFAULT_FIELDS[group]
+      ]),
+      ["focusFieldLimit", Math.max(1, Math.min(12, Number(source.focusFieldLimit) || DEFAULT_FIELDS.focusFieldLimit))]
+    ]);
+  };
+  const mainLibraries = libraries.filter((library) => library.type === "main");
+  const [configLibraryId, setConfigLibraryId] = useState(mainLibraries[0]?.id || "");
+  const [configDraft, setConfigDraft] = useState(displayConfig || {});
+  const [configMessage, setConfigMessage] = useState("");
+  const loadedLibraryRef = useRef(null);
+
+  useEffect(() => {
+    const selected = mainLibraries.find((library) => library.id === configLibraryId) || mainLibraries[0];
+    if (!selected) return;
+    if (selected.id !== configLibraryId) {
+      setConfigLibraryId(selected.id);
+      return;
+    }
+    if (loadedLibraryRef.current !== selected.id) {
+      loadedLibraryRef.current = selected.id;
+      setConfigDraft(buildDraftFromConfig(selected.displayConfig || {}));
+    }
+  }, [configLibraryId, mainLibraries, displayConfig]);
+
+  const updateField = (group, index, patch) => {
+    setConfigDraft((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).map((field, fieldIndex) => fieldIndex === index ? { ...field, ...patch } : field)
+    }));
+  };
+
+  const availableFields = useMemo(() => {
+    const library = mainLibraries.find((item) => item.id === configLibraryId);
+    return library?.availableFields || [];
+  }, [mainLibraries, configLibraryId]);
+
+  const addField = (group) => {
+    const usedSources = new Set((configDraft[group] || []).map((field) => field.source));
+    const candidate = availableFields.find((field) => !usedSources.has(field.source));
+    if (!candidate) {
+      setConfigMessage("没有可添加的新字段。");
+      return;
+    }
+    setConfigDraft((prev) => ({
+      ...prev,
+      [group]: [...(prev[group] || []), { ...candidate, key: `${group}:${candidate.source}`, enabled: true, displayType: "text", showEmpty: false }]
+    }));
+  };
+
+  const removeField = (group, index) => {
+    setConfigDraft((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).filter((_, fieldIndex) => fieldIndex !== index)
+    }));
+  };
+
+  const saveConfig = async () => {
+    if (!configLibraryId) return;
+    const result = await putJson(`/api/libraries/${configLibraryId}/display-config`, { displayConfig: configDraft });
+    const next = result.displayConfig || configDraft;
+    loadedLibraryRef.current = configLibraryId;
+    setDisplayConfig(next);
+    setConfigDraft(buildDraftFromConfig(next));
+    await refreshLibraries();
+    setConfigMessage("已保存");
+  };
+
+  const resetConfig = () => {
+    const library = mainLibraries.find((item) => item.id === configLibraryId);
+    setConfigDraft(buildDraftFromConfig(library?.displayConfig || {}));
+    setConfigMessage("");
+  };
+
   return (
     <section className="panel small-panel">
       <div className="panel-title">
@@ -998,6 +1167,42 @@ function AnalysisSettings({
         <span>忽略基础功能词</span>
         <em>默认开启</em>
       </label>
+
+      <div className="analysis-setting-block">
+        <div className="setting-title">词库字段显示</div>
+        <select value={configLibraryId} onChange={(event) => setConfigLibraryId(event.target.value)}>
+          {mainLibraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
+        </select>
+        {DISPLAY_GROUPS.map((group) => {
+          const fields = configDraft[group] || DEFAULT_FIELDS[group];
+          return (
+          <div key={group} className="display-field-group">
+            <strong>{group === "tokenFields" ? "词块标记区" : group === "tooltipFields" ? "词块悬浮提示" : group === "focusFields" ? "重点词清单外部字段" : "词块点击详情字段"}</strong>
+            {fields.map((field, index) => (
+              <label key={field.key} className="check-row">
+                <input type="checkbox" checked={field.enabled !== false} onChange={(event) => updateField(group, index, { enabled: event.target.checked })} />
+                <select value={field.source} onChange={(event) => {
+                  const source = event.target.value;
+                  const option = availableFields.find((item) => item.source === source);
+                  updateField(group, index, { source, label: option?.label || field.label });
+                }}>
+                  {availableFields.map((option) => <option key={option.source} value={option.source}>{option.label}</option>)}
+                </select>
+                <input value={field.label} onChange={(event) => updateField(group, index, { label: event.target.value })} />
+                <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => removeField(group, index)}>删除</button>
+              </label>
+            ))}
+            <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => addField(group)}>添加字段</button>
+            {group === "focusFields" ? <label className="check-row"><span>外部最多显示字段数</span><input type="number" min="1" max="12" value={configDraft.focusFieldLimit || DEFAULT_FIELDS.focusFieldLimit} onChange={(event) => setConfigDraft((prev) => ({ ...prev, focusFieldLimit: Math.max(1, Math.min(12, Number(event.target.value) || 1)) }))} /><em>限制卡片上显示的字段数量,不影响上方已添加的字段</em></label> : null}
+          </div>
+          );
+        })}
+        <div className="button-row">
+          <button type="button" className="primary-btn" onClick={saveConfig} disabled={!configLibraryId}>保存字段显示</button>
+          <button type="button" className="secondary-btn" onClick={resetConfig}>恢复当前配置</button>
+          {configMessage ? <span className="upload-tips">{configMessage}</span> : null}
+        </div>
+      </div>
     </section>
   );
 }
@@ -1012,7 +1217,10 @@ function HomeConfigurationPage({
   analysisMode,
   setAnalysisMode,
   ignoreBasicWords,
-  setIgnoreBasicWords
+  setIgnoreBasicWords,
+  displayConfig,
+  setDisplayConfig,
+  refreshLibraries
 }) {
   const isLibraries = section === "libraries";
 
@@ -1021,13 +1229,13 @@ function HomeConfigurationPage({
       <div className="page-header">
         <div>
           <h1>{isLibraries ? "参与分析词库" : "分析设置"}</h1>
-          <p>{isLibraries ? "选择本次阅读诊断所使用的词库。" : "调整阅读诊断的识别规则。"}</p>
+          <p className="selectable-copy">{isLibraries ? "选择本次阅读诊断所使用的词库。" : "调整阅读诊断的识别规则。页面说明、提示和词卡文字均可直接拖选复制。"}</p>
         </div>
       </div>
       {isLibraries ? (
         <LibrarySelector libraries={libraries} selectedLibraryIds={selectedLibraryIds} setSelectedLibraryIds={setSelectedLibraryIds} includeExtra={includeExtra} setIncludeExtra={setIncludeExtra} />
       ) : (
-        <AnalysisSettings analysisMode={analysisMode} setAnalysisMode={setAnalysisMode} ignoreBasicWords={ignoreBasicWords} setIgnoreBasicWords={setIgnoreBasicWords} />
+        <AnalysisSettings analysisMode={analysisMode} setAnalysisMode={setAnalysisMode} ignoreBasicWords={ignoreBasicWords} setIgnoreBasicWords={setIgnoreBasicWords} libraries={libraries} displayConfig={displayConfig} setDisplayConfig={setDisplayConfig} refreshLibraries={refreshLibraries} />
       )}
     </div>
   );
@@ -1213,7 +1421,8 @@ function WordDetailPanel({
   onQuery,
   onRefresh,
   onClose,
-  onAddToExtra
+  onAddToExtra,
+  displayConfig
 }) {
   if (!word) return null;
 
@@ -1248,6 +1457,7 @@ function WordDetailPanel({
           >
             刷新
           </button>
+          <button type="button" className="ghost-btn mini-ghost-btn" onClick={() => copyText(buildWordDetailText(word))}>复制</button>
           {onAddToExtra ? <button type="button" className="secondary-btn mini-ghost-btn" onClick={onAddToExtra}>加入补充</button> : null}
           <button
             type="button"
@@ -1270,7 +1480,10 @@ function WordDetailPanel({
         </div>
       ) : null}
       {word.locations?.length ? <DetailSection title="教材位置"><div className="tag-row">{word.locations.map((location, index) => <span key={`${location.unit}-${location.page}-${index}`} className="tag">{location.unit || "未标注单元"}{location.page ? ` · p.${location.page}` : ""}</span>)}</div></DetailSection> : null}
-      {word.customFields && Object.keys(word.customFields).length ? <DetailSection title="自定义字段"><div className="meta-list">{Object.entries(word.customFields).map(([key, value]) => <div key={key}><strong>{key}</strong><span>{String(value)}</span></div>)}</div></DetailSection> : null}
+      {(displayConfig?.detailFields?.length ? displayConfig.detailFields : DEFAULT_DETAIL_FIELDS).some((field) => field.enabled) ? <DetailSection title="词库字段"><div className="meta-list">{(displayConfig?.detailFields?.length ? displayConfig.detailFields : DEFAULT_DETAIL_FIELDS).filter((field) => field.enabled).map((field) => {
+        const value = resolveDisplayValue(word, field.source);
+        return value || field.showEmpty ? <div key={field.key}><strong>{field.label}</strong><span>{String(value || "-")}</span></div> : null;
+      })}</div></DetailSection> : null}
 
       {aiEntry?.data ? (
         <AIWordResult result={aiEntry.data} wordMeta={word} />
@@ -1471,7 +1684,8 @@ function HomePage({
   clearWordAiCache,
   aiSettings,
   analysisMode,
-  ignoreBasicWords
+  ignoreBasicWords,
+  displayConfig
 }) {
   const [text, setText] = useState("");
   const [tokens, setTokens] = useState([]);
@@ -1591,6 +1805,11 @@ function HomePage({
     setWordDetailError("");
   };
 
+  const handleTokenClick = (token) => {
+    if (hasTextSelection()) return;
+    handleOpenWordDetail(token);
+  };
+
   const handleWordDetailQuery = async (forceRefresh = false) => {
     if (!selectedWordDetail) return;
     const key = getWordAiKey(selectedWordDetail);
@@ -1626,6 +1845,7 @@ function HomePage({
   };
 
   const handleFocusCardSelect = (word) => {
+    if (hasTextSelection()) return;
     setSelectedFocusKey((prev) => (prev === word.lemma ? "" : word.lemma));
     setFocusDetailError("");
   };
@@ -1932,8 +2152,8 @@ function HomePage({
                   );
                 }
 
-                const miniInfo = buildTokenMiniInfo(token);
-                const miniMeaning = buildTokenMeaning(token);
+                const miniInfo = buildTokenMiniInfo(token, displayConfig);
+                const miniMeaning = buildTokenMeaning(token, displayConfig);
                 const tokenClass = token.analysis?.basicIgnored
                   ? "token-basic"
                   : `token-${token.mark}`;
@@ -1943,13 +2163,15 @@ function HomePage({
                     key={token.id}
                     type="button"
                     className={`word-token ${tokenClass} ${selectedTokenId === token.id ? "token-selected" : ""}`}
-                    title={buildTokenTitle(token)}
+                    title={buildTokenTitle(token, displayConfig)}
                     onMouseDown={(event) => {
-                      event.preventDefault();
-                      handlePaintStart(token);
+                      if (event.altKey) {
+                        event.preventDefault();
+                        handlePaintStart(token);
+                      }
                     }}
                     onMouseEnter={() => handlePaintEnter(token)}
-                    onClick={() => handleOpenWordDetail(token)}
+                    onClick={() => handleTokenClick(token)}
                   >
                     <span className="word-main">{token.text}</span>
                     <span className="word-mark">
@@ -2010,14 +2232,11 @@ function HomePage({
                         onClick={() => handleFocusCardSelect(word)}
                       >
                         <div className="focus-main">
-                          <div className="focus-word">
+                          <div className="focus-word selectable-copy">
                             {word.displayText} <span>× {word.count}</span>
                           </div>
-                          <div className="focus-meta">{buildFocusMeta(word)}</div>
-                          {word.meaning ? (
-                            <div className="focus-meaning">{word.meaning}</div>
-                          ) : null}
-                          <div className="upload-tips">
+                          <div className="focus-meta selectable-copy">{buildFocusMeta(word, displayConfig)}</div>
+                          <div className="upload-tips selectable-copy">
                             点击卡片展开详情与 AI 解析
                           </div>
 
@@ -2060,6 +2279,7 @@ function HomePage({
             onRefresh={() => selectedFocusDetail ? handleFocusDetailQuery(true) : handleWordDetailQuery(true)}
             onClose={() => { setSelectedTokenId(null); setSelectedFocusKey(""); }}
             onAddToExtra={() => handleAddExtraWord(selectedFocusWord || activeHomeDetail)}
+            displayConfig={displayConfig}
           />
         </aside>
       ) : null}
@@ -2377,6 +2597,7 @@ function LibraryWordsPage({
   };
 
   const handleSelectWord = (word) => {
+    if (hasTextSelection()) return;
     const nextKey = `${word.libraryId}-${word.lemma}`;
     setSelectedCardKey((prev) => (prev === nextKey ? "" : nextKey));
     setDetailError("");
@@ -2627,15 +2848,15 @@ Unit：${word.unit || ""}
 词义：${word.meaning || ""}`}
                 onClick={() => handleSelectWord(word)}
               >
-                <div className="vocab-word">{word.lemma}</div>
-                {word.libraryType === "extra" ? <div className="vocab-meta">补充词库</div> : <>
-                  <div className="vocab-meta">{word.unit || "无 Unit"}</div>
-                  <div className="vocab-meta">
+                <div className="vocab-word selectable-copy">{word.lemma}</div>
+                {word.libraryType === "extra" ? <div className="vocab-meta selectable-copy">补充词库</div> : <>
+                  <div className="vocab-meta selectable-copy">{word.unit || "无 Unit"}</div>
+                  <div className="vocab-meta selectable-copy">
                     {word.page ? `p.${word.page}` : "无页码"} · {word.frequencyText || "暂无频率"}
                   </div>
                 </>}
-                {word.meaning ? <div className="vocab-meta">{word.meaning}</div> : null}
-                <div className="vocab-level">
+                {word.meaning ? <div className="vocab-meta selectable-copy">{word.meaning}</div> : null}
+                <div className="vocab-level selectable-copy">
                   {word.level} · {word.levelLabel}
                 </div>
               </div>
@@ -3018,6 +3239,8 @@ export default function App() {
   const [includeExtra, setIncludeExtra] = useState(true);
   const [analysisMode, setAnalysisMode] = useState("friendly");
   const [ignoreBasicWords, setIgnoreBasicWords] = useState(true);
+  const activeDisplayLibrary = libraries.find((library) => selectedLibraryIds.includes(library.id)) || libraries.find((library) => library.type === "main");
+  const [displayConfig, setDisplayConfig] = useState({});
   const [needLibraryRefresh, setNeedLibraryRefresh] = useState(0);
   const [providerOptions, setProviderOptions] = useState([]);
   const [fieldHelp, setFieldHelp] = useState({
@@ -3133,6 +3356,10 @@ export default function App() {
     refreshAISettings();
   }, []);
 
+  useEffect(() => {
+    setDisplayConfig(activeDisplayLibrary?.displayConfig || {});
+  }, [activeDisplayLibrary?.id, activeDisplayLibrary?.displayConfig]);
+
   return (
     <div className="app-layout">
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
@@ -3153,6 +3380,7 @@ export default function App() {
             aiSettings={aiSettings}
             analysisMode={analysisMode}
             ignoreBasicWords={ignoreBasicWords}
+            displayConfig={displayConfig}
           />
         ) : activePage === "home-libraries" || activePage === "home-analysis" ? (
           <HomeConfigurationPage
@@ -3166,6 +3394,9 @@ export default function App() {
             setAnalysisMode={setAnalysisMode}
             ignoreBasicWords={ignoreBasicWords}
             setIgnoreBasicWords={setIgnoreBasicWords}
+            displayConfig={displayConfig}
+            setDisplayConfig={setDisplayConfig}
+            refreshLibraries={refreshLibraries}
           />
         ) : activePage === "library" ? (
           <LibraryPage

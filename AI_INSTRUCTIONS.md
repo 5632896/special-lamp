@@ -32,7 +32,8 @@
 
 ### 关键功能映射
 
-- **词库上传**：`parse_uploaded_vocab()`、`parse_upload_table()`、`entries_from_mapping()`；预览/确认入口为 `/api/vocab/import-preview` 与 `/api/vocab/import-confirm`。确认前必须有单词列映射；未映射列写入 `customFields`。
+- **词库上传**：`parse_uploaded_vocab()`、`parse_upload_table()`、`entries_from_mapping()`；预览/确认入口为 `/api/vocab/import-preview` 与 `/api/vocab/import-confirm`。确认前必须有单词列映射；标准映射字段有 11 个，且可在预览中基于实际源列表头新增 `key`、`label`、`sourceHeader`、`displaySource` 字段定义。标准字段和自定义字段可共享同一源列，未映射列继续写入 `customFields`。仅保留 5 MB 文件大小限制，不应恢复 300 行限制。
+- **字段显示配置**：每个词库的 `displayConfig` 写入 SQLite `libraries.display_config_json`。配置包含 `tokenFields`（词块标记区）、`tooltipFields`（词块悬浮提示）、`focusFields`（重点词清单外部字段）、`detailFields`（词块点击详情字段）及 `focusFieldLimit`（重点词卡片表面显示数量，范围 1～12）。`/api/libraries/{library_id}/display-config` 负责读取/保存；旧词库由 `normalized_display_config()` 生成默认配置。前端可使用 `availableFields` 选择标准或自定义字段。保存后必须以接口返回的配置更新草稿，不能被词库刷新前的旧数据覆盖。
 - **文章标色与诊断**：前端 `tokenizeText()`、`HomePage`；后端 `analyze()`，入口 `/api/analyze`。
 - **AI 解释/翻译/对话**：`call_ai_chat()`、`ai_word_query()`、`ai_article_translate()`、`ai_chat()`；前端 `WordDetailPanel`、`AIChatPage`。
 - **掌握度追踪**：`update_level_by_mark()`、`build_mastery_overview()`；状态存入 SQLite 的 `user_vocab_status`，间隔复习排程存入 `review_schedule`，接口为 `/api/review/due` 与 `/api/review/mark`。
@@ -54,7 +55,7 @@
 - 词库字段映射预览、保留自定义列与多教材位置、单词库 CSV 导出、二次确认删除主词库、白名单增删清空导入导出、基础间隔复习队列。
 - 词库上传、主/补充/基础词库管理。
 - 英文分词、词库匹配、普通/严格模式、重点词排序、文章统计。
-- 词块拖拽标色、词义参考、单词详情、掌握等级分布与筛选。
+- 单击词块打开详情且保留已分析的词汇字段；标色仅由显式标记/拖拽操作触发。支持按 `Alt` 拖拽连续标色、普通拖拽文本选择、词义参考、可选择的重点词文本与可复制的单词详情、掌握等级分布与筛选；重点词清单不提供单独复制按钮。
 - AI 单词解析（携带教材位置/自定义字段）、全文翻译、带文件的多轮 AI 对话、缓存与 SQLite 聊天记录。
 
 ## 6. 待办（高→低）
@@ -102,7 +103,7 @@ src-tauri/
 - 前端预览：进入 `frontend` 后执行 `npm run preview`
 - FastAPI sidecar 构建：`python scripts/build_tauri_sidecar.py`
 - Tauri Windows 安装程序构建：进入 `src-tauri` 后执行 `..\\frontend\\node_modules\\.bin\\tauri.cmd build --bundles nsis`
-- 发布附件：只上传 `release/desktop/英语阅读工具_1.0.0_x64-setup.exe`；不要上传 MSI、`target` 缓存或解压版目录。
+- 发布附件：只上传 `release/desktop/英语阅读工具_1.30.0_x64-setup.exe`；不要上传 MSI、`target` 缓存或解压版目录。发布标签采用 `v1.30`。
 - Git 状态：`git status`
 - Git 提交：`git add .`，再执行 `git commit -m "说明"`
 - Git 推送：`git push gitee main`
@@ -111,5 +112,5 @@ src-tauri/
 
 - 保持现有风格：Python 4 空格、类型注解、`snake_case`；React 函数组件、`camelCase`。
 - 不要无关重构；后端 API 的中文错误文案应保持清晰。
-- 新增数据字段必须同时检查：默认值、读取兼容、写入、前端展示与缓存兼容。
+- 新增数据字段必须同时检查：默认值、读取兼容、写入、前端展示与缓存兼容。词库字段显示变更还必须保留 `lemma`、标记和数量等身份信息，不能把 API Key 写入显示配置。
 - 修改 AI 行为时保留 `forceRefresh`、缓存隔离、超时限制与 JSON 解析容错。

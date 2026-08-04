@@ -21,7 +21,17 @@ fn sidecar_path(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>>
             .join("resources")
             .join(SIDECAR_NAME));
     }
-    Ok(app.path().resource_dir()?.join(SIDECAR_NAME))
+
+    let bundled_path = app.path().resource_dir()?.join(SIDECAR_NAME);
+    if bundled_path.is_file() {
+        return Ok(bundled_path);
+    }
+
+    let portable_path = std::env::current_exe()?
+        .parent()
+        .ok_or("无法确定桌面程序目录。")?
+        .join(SIDECAR_NAME);
+    Ok(portable_path)
 }
 
 fn start_sidecar(app: &tauri::App) -> Result<Child, Box<dyn std::error::Error>> {

@@ -61,7 +61,6 @@ OLD_EXTRA_VOCAB_PATH = DATA_DIR / "extra_vocab.json"
 EXTRA_LIBRARY_ID = "extra"
 BASIC_LIBRARY_ID = "basic_whitelist"
 MAX_ANALYZE_WORDS = 5000
-MAX_IMPORT_ROWS = 300
 MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 SUPPORTED_UPLOAD_EXTENSIONS = {".csv", ".txt", ".xlsx", ".docx", ".pdf"}
 
@@ -245,6 +244,156 @@ AI_PROVIDER_PRESETS = [
         "note": "本地 Ollama OpenAI 兼容接口",
     },
 ]
+DISPLAY_FIELD_GROUPS = {
+    "tokenFields": [
+        {"key": "meaning", "label": "释义", "source": "meaning", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "unit", "label": "单元", "source": "unit", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "page", "label": "页码", "source": "page", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "frequency", "label": "频率", "source": "frequencyText", "enabled": True, "displayType": "text", "showEmpty": False},
+    ],
+    "tooltipFields": [
+        {"key": "lemma", "label": "词形", "source": "lemma", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "basicText", "label": "基础词", "source": "basicText", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "outsideText", "label": "词库外", "source": "outsideText", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "sourceText", "label": "来源", "source": "sourceText", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "unit", "label": "单元", "source": "unit", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "page", "label": "页码", "source": "page", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "frequencyText", "label": "频率", "source": "frequencyText", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "level", "label": "掌握等级", "source": "levelLabel", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "meaning", "label": "词义", "source": "meaning", "enabled": True, "displayType": "text", "showEmpty": False},
+    ],
+    "focusFields": [
+        {"key": "meaning", "label": "释义", "source": "meaning", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "libraryName", "label": "词库", "source": "libraryName", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "unit", "label": "单元", "source": "unit", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "page", "label": "页码", "source": "page", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "frequency", "label": "频率", "source": "frequencyText", "enabled": True, "displayType": "text", "showEmpty": False},
+    ],
+    "detailFields": [
+        {"key": "meaning", "label": "释义", "source": "meaning", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "unit", "label": "单元", "source": "unit", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "page", "label": "页码", "source": "page", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "frequency", "label": "频率", "source": "frequencyText", "enabled": True, "displayType": "text", "showEmpty": False},
+    ],
+}
+
+
+def default_display_config(library: dict) -> dict:
+    config = json.loads(json.dumps(DISPLAY_FIELD_GROUPS, ensure_ascii=False))
+    config["focusFieldLimit"] = 5
+    custom_names = []
+    for entry in library.get("entries", []):
+        fields = entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {}
+        for name in fields:
+            if name not in custom_names:
+                custom_names.append(name)
+    custom_fields = [
+        {"key": f"custom:{name}", "label": name, "source": f"customFields.{name}", "enabled": True, "displayType": "text", "showEmpty": False}
+        for name in custom_names
+    ]
+    config["detailFields"].extend(custom_fields)
+    for definition in library.get("fieldDefinitions", []):
+        if not isinstance(definition, dict):
+            continue
+        key = safe_text(definition.get("key"))
+        label = safe_text(definition.get("label")) or key
+        if key and not any(field.get("source") == f"customFields.{key}" for field in config["detailFields"]):
+            config["detailFields"].append({"key": f"custom:{key}", "label": label, "source": f"customFields.{key}", "enabled": True, "displayType": "text", "showEmpty": False})
+    return config
+
+
+def normalized_display_config(library: dict) -> dict:
+    saved = library.get("displayConfig")
+    if not isinstance(saved, dict) or not saved:
+        return default_display_config(library)
+    defaults = default_display_config(library)
+    result = {}
+    for group in DISPLAY_FIELD_GROUPS:
+        fields = saved.get(group)
+        result[group] = fields if isinstance(fields, list) and fields else defaults[group]
+    try:
+        field_limit = int(saved.get("focusFieldLimit", defaults["focusFieldLimit"]))
+    except (TypeError, ValueError):
+        field_limit = defaults["focusFieldLimit"]
+    result["focusFieldLimit"] = max(1, min(12, field_limit))
+    return result
+
+
+def validate_display_config(library: dict, config: dict) -> dict:
+    allowed = {key for key, _ in IMPORT_MAPPING_FIELDS} | {
+        "libraryName", "frequencyText", "sourceText", "outsideText", "level", "levelLabel", "meaning", "unit", "page", "lemma", "pos", "ipa", "audioUrl",
+        "basicText", "count", "fuzzyCount", "unknownCount", "suggestedLevel"
+    }
+    custom_names = {
+        name
+        for entry in library.get("entries", [])
+        for name in (entry.get("customFields", {}) if isinstance(entry.get("customFields"), dict) else {})
+    }
+    normalized = {}
+    for group in DISPLAY_FIELD_GROUPS:
+        raw_fields = config.get(group, [])
+        if not isinstance(raw_fields, list):
+            raise HTTPException(status_code=400, detail=f"{group} 必须是字段数组。")
+        seen = set()
+        fields = []
+        for index, field in enumerate(raw_fields):
+            if not isinstance(field, dict):
+                continue
+            source = safe_text(field.get("source"))
+            label = safe_text(field.get("label")) or source
+            key = safe_text(field.get("key")) or f"{group}:{index}"
+            custom_name = source.removeprefix("customFields.") if source.startswith("customFields.") else ""
+            if source not in allowed and custom_name not in custom_names:
+                raise HTTPException(status_code=400, detail=f"字段来源无效：{source}")
+            if key in seen:
+                raise HTTPException(status_code=400, detail=f"{group} 存在重复字段。")
+            seen.add(key)
+            fields.append({"key": key, "label": label[:80], "source": source, "enabled": bool(field.get("enabled", True)), "displayType": "text", "showEmpty": bool(field.get("showEmpty", False))})
+        normalized[group] = fields
+    try:
+        focus_field_limit = int(config.get("focusFieldLimit", 5))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="重点词清单字段上限必须是数字。")
+    normalized["focusFieldLimit"] = max(1, min(12, focus_field_limit))
+    return normalized
+
+
+def available_display_fields(library: dict) -> list[dict]:
+    fields = [
+        {"source": "meaning", "label": "释义"},
+        {"source": "unit", "label": "单元"},
+        {"source": "page", "label": "页码"},
+        {"source": "frequencyText", "label": "频率"},
+        {"source": "libraryName", "label": "词库"},
+        {"source": "lemma", "label": "词形"},
+        {"source": "sourceText", "label": "来源"},
+        {"source": "outsideText", "label": "词库外说明"},
+        {"source": "level", "label": "掌握等级"},
+        {"source": "levelLabel", "label": "掌握等级名称"},
+        {"source": "pos", "label": "词性"},
+        {"source": "ipa", "label": "音标"},
+        {"source": "audioUrl", "label": "音频链接"},
+        {"source": "basicText", "label": "基础词状态"},
+        {"source": "count", "label": "出现次数"},
+        {"source": "fuzzyCount", "label": "模糊次数"},
+        {"source": "unknownCount", "label": "未掌握次数"},
+        {"source": "suggestedLevel", "label": "建议等级"},
+    ]
+    for definition in library.get("fieldDefinitions", []):
+        if isinstance(definition, dict):
+            key = safe_text(definition.get("key"))
+            source = f"customFields.{key}" if key else ""
+            label = safe_text(definition.get("label"))
+            if source and label and not any(item["source"] == source for item in fields):
+                fields.append({"source": source, "label": label})
+    custom_names = []
+    for entry in library.get("entries", []):
+        custom_fields = entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {}
+        for name in custom_fields:
+            if name not in custom_names:
+                custom_names.append(name)
+    fields.extend({"source": f"customFields.{name}", "label": name} for name in custom_names)
+    return fields
 
 AI_CHAT_TEXT_EXTENSIONS = {
     ".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".jsx", ".tsx",
@@ -336,7 +485,12 @@ class ImportConfirmRequest(BaseModel):
     headers: list[str] = []
     rows: list[list] = []
     mapping: dict[str, str] = {}
+    fieldDefinitions: list[dict] = []
     targetType: Literal["main", "basic"] = "main"
+
+
+class DisplayConfigRequest(BaseModel):
+    displayConfig: dict = {}
 
 
 class AIImportDraftRequest(BaseModel):
@@ -1040,7 +1194,7 @@ def infer_import_mapping(headers: list[str]) -> dict[str, str]:
     return mapping
 
 
-def entries_from_mapping(headers: list[str], rows: list[list], mapping: dict[str, str]) -> list[dict]:
+def entries_from_mapping(headers: list[str], rows: list[list], mapping: dict[str, str], field_definitions: list[dict] | None = None) -> list[dict]:
     header_map = {str(header): index for index, header in enumerate(headers)}
     mapped = {field: header_map.get(str(source)) for field, source in mapping.items()}
     word_index = mapped.get("lemma")
@@ -1058,6 +1212,16 @@ def entries_from_mapping(headers: list[str], rows: list[list], mapping: dict[str
             value = safe_text(get_cell(row, mapped.get(field)))
             if value:
                 fields[dict(IMPORT_MAPPING_FIELDS)[field]] = value
+        for definition in field_definitions or []:
+            if not isinstance(definition, dict):
+                continue
+            key = safe_text(definition.get("key"))
+            source = safe_text(definition.get("sourceHeader") or definition.get("source"))
+            if not key or not source or source not in header_map:
+                continue
+            value = safe_text(get_cell(row, header_map[source]))
+            if value:
+                fields[key] = value
         unit = safe_text(get_cell(row, mapped.get("unit")))
         lesson = safe_text(get_cell(row, mapped.get("lesson")))
         entries.append({
@@ -1158,6 +1322,8 @@ def summarize_library(lib: dict) -> dict:
         "type": lib.get("type"),
         "createdAt": lib.get("createdAt"),
         "count": len(lib.get("entries", [])),
+        "displayConfig": normalized_display_config(lib),
+        "availableFields": available_display_fields(lib),
     }
 
 
@@ -1945,7 +2111,7 @@ def build_import_draft_messages(text: str) -> list[dict]:
                 "JSON 结构必须为："
                 '{"headers":["word","meaning"],"rows":[["example","示例"]]}。'
                 "headers 可使用 word、meaning、unit、lesson、page、frequency、pos、ipa、audio_url、serial；"
-                "仅保留可确认的英文单词，最多 300 行。"
+                "仅保留可确认的英文单词。"
             ),
         },
         {"role": "user", "content": text[:20000]},
@@ -2006,6 +2172,26 @@ def list_libraries():
         "libraries": [summarize_library(lib) for lib in libraries],
         "defaultExtraLibraryId": get_default_extra_library_id(libraries),
     }
+
+
+@app.get("/api/libraries/{library_id}/display-config")
+def get_library_display_config(library_id: str):
+    libraries = load_libraries()
+    library = next((item for item in libraries if item.get("id") == library_id), None)
+    if not library:
+        raise HTTPException(status_code=404, detail="词库不存在。")
+    return {"libraryId": library_id, "displayConfig": normalized_display_config(library)}
+
+
+@app.put("/api/libraries/{library_id}/display-config")
+def update_library_display_config(library_id: str, request: DisplayConfigRequest):
+    libraries = load_libraries()
+    library = next((item for item in libraries if item.get("id") == library_id), None)
+    if not library:
+        raise HTTPException(status_code=404, detail="词库不存在。")
+    library["displayConfig"] = validate_display_config(library, request.displayConfig)
+    save_libraries(libraries)
+    return {"ok": True, "libraryId": library_id, "displayConfig": library["displayConfig"]}
 
 
 @app.get("/api/basic-words")
@@ -2219,7 +2405,7 @@ def ai_import_draft(request: AIImportDraftRequest):
         raise HTTPException(status_code=502, detail="AI 草稿缺少 headers 或 rows。")
 
     rows = []
-    for raw_row in raw_rows[:MAX_IMPORT_ROWS]:
+    for raw_row in raw_rows:
         if isinstance(raw_row, list):
             rows.append(([safe_text(cell) or "" for cell in raw_row[:len(headers)]] + [""] * len(headers))[:len(headers)])
 
@@ -2566,8 +2752,6 @@ async def vocab_import_preview(file: UploadFile = File(...)):
     if len(content) > MAX_IMPORT_FILE_BYTES:
         raise HTTPException(status_code=413, detail="导入文件不能超过 5 MB。")
     headers, rows = parse_upload_table(file.filename or "", content)
-    if len(rows) > MAX_IMPORT_ROWS:
-        raise HTTPException(status_code=400, detail=f"当前导入最多支持 {MAX_IMPORT_ROWS} 行数据，请拆分文件后重试。")
     mapping = infer_import_mapping(headers)
     entries = entries_from_mapping(headers, rows, mapping)
     return {
@@ -2575,6 +2759,7 @@ async def vocab_import_preview(file: UploadFile = File(...)):
         "mapping": mapping, "sample": entries[:10], "rowCount": len(rows),
         "recognizedCount": len(entries),
         "mappingFields": [{"key": key, "label": label} for key, label in IMPORT_MAPPING_FIELDS],
+        "fieldDefinitions": [],
         "message": "请确认单词列映射后再导入；单元、页码、频率等均为可选，未映射列会作为自定义字段保留。",
     }
 
@@ -2582,9 +2767,24 @@ async def vocab_import_preview(file: UploadFile = File(...)):
 @app.post("/api/vocab/import-confirm")
 def vocab_import_confirm(request: ImportConfirmRequest):
     ensure_data_files()
-    if len(request.rows) > MAX_IMPORT_ROWS:
-        raise HTTPException(status_code=400, detail=f"单次导入最多支持 {MAX_IMPORT_ROWS} 行数据。")
-    entries = entries_from_mapping(request.headers, request.rows, request.mapping)
+    field_definitions = []
+    used_keys = set()
+    for definition in request.fieldDefinitions:
+        if not isinstance(definition, dict):
+            continue
+        label = safe_text(definition.get("label"))[:80]
+        key = re.sub(r"[^A-Za-z0-9_-]+", "_", safe_text(definition.get("key"))).strip("_")[:80]
+        source_header = safe_text(definition.get("sourceHeader") or definition.get("source"))
+        if not label or not key or source_header not in request.headers or key in used_keys:
+            continue
+        used_keys.add(key)
+        field_definitions.append({
+            "key": key,
+            "label": label,
+            "sourceHeader": source_header,
+            "displaySource": f"customFields.{key}",
+        })
+    entries = entries_from_mapping(request.headers, request.rows, request.mapping, field_definitions)
     if not entries:
         raise HTTPException(status_code=400, detail="未识别到单词；请将一个源列映射为“单词/lemma”。")
     libraries = load_libraries()
@@ -2610,6 +2810,7 @@ def vocab_import_confirm(request: ImportConfirmRequest):
     library = {
         "id": make_library_id(), "name": safe_text(request.libraryName) or "未命名词库",
         "type": "main", "createdAt": now_iso(), "entries": entries,
+        "fieldDefinitions": field_definitions,
     }
     libraries.append(library)
     get_extra_library(libraries)
