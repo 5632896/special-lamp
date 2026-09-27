@@ -31,3 +31,6 @@ src-tauri/resources/vocab-api.exe
 .vscode/launch.json
 
 src-tauri/gen/
+
+# Local edit snapshots (never publish)
+.codex-backup-current/

@@ -1,6 +1,6 @@
 [package]
 name = "reading-vocab-desktop"
-version = "1.30.0"
+version = "1.31.0"
 description = "英语阅读工具桌面端"
 authors = [""]
 edition = "2021"

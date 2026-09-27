@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 try:
     from .runtime_paths import DATA_DIR
@@ -27,12 +28,15 @@ def _read_json_value(value: str | None, default: Any) -> Any:
         return default
 
 
-def _connect() -> sqlite3.Connection:
+@contextmanager
+def _connect() -> Iterator[sqlite3.Connection]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+    # sqlite3.Connection.__exit__ commits but does not close the file handle.
+    with closing(sqlite3.connect(DB_PATH)) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            yield connection
 
 
 def initialize() -> None:
@@ -110,6 +114,9 @@ def initialize() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_entries_library_lemma ON vocab_entries(library_id, lemma);
+            -- Child lookups during library load and FK cascades during full-library saves.
+            CREATE INDEX IF NOT EXISTS idx_locations_entry ON entry_locations(entry_id, location_order, id);
+            CREATE INDEX IF NOT EXISTS idx_custom_fields_entry ON entry_custom_fields(entry_id, id);
             CREATE INDEX IF NOT EXISTS idx_review_due ON review_schedule(due_at);
             """
         )
@@ -120,15 +127,7 @@ def initialize() -> None:
             conn.execute("ALTER TABLE libraries ADD COLUMN field_definitions_json TEXT NOT NULL DEFAULT '[]'")
 
 
-def _entry_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
-    locations = conn.execute(
-        "SELECT unit, page FROM entry_locations WHERE entry_id = ? ORDER BY location_order, id",
-        (row["id"],),
-    ).fetchall()
-    fields = conn.execute(
-        "SELECT field_name, field_value FROM entry_custom_fields WHERE entry_id = ? ORDER BY id",
-        (row["id"],),
-    ).fetchall()
+def _entry_from_row(row: sqlite3.Row, locations: list[sqlite3.Row], fields: list[sqlite3.Row]) -> dict[str, Any]:
     first = locations[0] if locations else None
     custom_fields = {field["field_name"]: field["field_value"] for field in fields}
     return {
@@ -149,19 +148,30 @@ def load_libraries() -> list[dict[str, Any]]:
     initialize()
     with _connect() as conn:
         libraries = conn.execute("SELECT * FROM libraries ORDER BY created_at, id").fetchall()
-        result = []
-        for library in libraries:
-            rows = conn.execute(
-                "SELECT * FROM vocab_entries WHERE library_id = ? ORDER BY sort_order, id",
-                (library["id"],),
-            ).fetchall()
-            result.append({
-                "id": library["id"], "name": library["name"], "type": library["type"],
-                "createdAt": library["created_at"],
-                "displayConfig": _read_json_value(library["display_config_json"], {}),
-                "fieldDefinitions": _read_json_value(library["field_definitions_json"], []),
-                "entries": [_entry_from_row(conn, row) for row in rows],
-            })
+        result = [{
+            "id": library["id"], "name": library["name"], "type": library["type"],
+            "createdAt": library["created_at"],
+            "displayConfig": _read_json_value(library["display_config_json"], {}),
+            "fieldDefinitions": _read_json_value(library["field_definitions_json"], []),
+            "entries": [],
+        } for library in libraries]
+        by_library = {library["id"]: library for library in result}
+        # Batch child rows instead of issuing two SELECTs for every vocabulary entry.
+        locations_by_entry: dict[int, list[sqlite3.Row]] = {}
+        for location in conn.execute(
+            "SELECT * FROM entry_locations ORDER BY entry_id, location_order, id"
+        ):
+            locations_by_entry.setdefault(location["entry_id"], []).append(location)
+        fields_by_entry: dict[int, list[sqlite3.Row]] = {}
+        for field in conn.execute(
+            "SELECT * FROM entry_custom_fields ORDER BY entry_id, id"
+        ):
+            fields_by_entry.setdefault(field["entry_id"], []).append(field)
+        for row in conn.execute("SELECT * FROM vocab_entries ORDER BY library_id, sort_order, id"):
+            entry_id = row["id"]
+            by_library[row["library_id"]]["entries"].append(_entry_from_row(
+                row, locations_by_entry.get(entry_id, []), fields_by_entry.get(entry_id, []),
+            ))
         return result
 
 

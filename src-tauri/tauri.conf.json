@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "英语阅读工具",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "identifier": "com.readingvocab.desktop",
   "build": {
     "beforeDevCommand": {
@@ -33,13 +33,16 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
     "resources": {
       "resources/vocab-api.exe": "vocab-api.exe"
     },
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
       }
     }
   }

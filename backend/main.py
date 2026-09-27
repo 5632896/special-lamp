@@ -275,12 +275,19 @@ DISPLAY_FIELD_GROUPS = {
         {"key": "page", "label": "页码", "source": "page", "enabled": True, "displayType": "text", "showEmpty": False},
         {"key": "frequency", "label": "频率", "source": "frequencyText", "enabled": True, "displayType": "text", "showEmpty": False},
     ],
+    "wordListFields": [
+        {"key": "meaning", "label": "释义", "source": "meaning", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "ipa", "label": "音标", "source": "ipa", "enabled": True, "displayType": "text", "showEmpty": False},
+        {"key": "unit", "label": "单元", "source": "unit", "enabled": True, "displayType": "text", "showEmpty": False},
+    ],
 }
 
 
 def default_display_config(library: dict) -> dict:
     config = json.loads(json.dumps(DISPLAY_FIELD_GROUPS, ensure_ascii=False))
     config["focusFieldLimit"] = 5
+    config.update({"listMode": "recall", "listLayout": "list", "rushMode": "recall",
+                   "detailPlacement": "below", "allowMultipleExpanded": True})
     custom_names = []
     for entry in library.get("entries", []):
         fields = entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {}
@@ -310,12 +317,17 @@ def normalized_display_config(library: dict) -> dict:
     result = {}
     for group in DISPLAY_FIELD_GROUPS:
         fields = saved.get(group)
-        result[group] = fields if isinstance(fields, list) and fields else defaults[group]
+        result[group] = fields if isinstance(fields, list) and (fields or group == "wordListFields") else defaults[group]
     try:
         field_limit = int(saved.get("focusFieldLimit", defaults["focusFieldLimit"]))
     except (TypeError, ValueError):
         field_limit = defaults["focusFieldLimit"]
     result["focusFieldLimit"] = max(1, min(12, field_limit))
+    result["listMode"] = saved.get("listMode") if saved.get("listMode") in {"browse", "recall"} else defaults["listMode"]
+    result["listLayout"] = saved.get("listLayout") if saved.get("listLayout") in {"list", "tiles"} else defaults["listLayout"]
+    result["rushMode"] = saved.get("rushMode") if saved.get("rushMode") in {"browse", "recall"} else defaults["rushMode"]
+    result["detailPlacement"] = saved.get("detailPlacement") if saved.get("detailPlacement") in {"below", "floating"} else defaults["detailPlacement"]
+    result["allowMultipleExpanded"] = bool(saved.get("allowMultipleExpanded", defaults["allowMultipleExpanded"]))
     return result
 
 
@@ -329,9 +341,15 @@ def validate_display_config(library: dict, config: dict) -> dict:
         for entry in library.get("entries", [])
         for name in (entry.get("customFields", {}) if isinstance(entry.get("customFields"), dict) else {})
     }
+    custom_names.update(
+        safe_text(definition.get("key"))
+        for definition in library.get("fieldDefinitions", [])
+        if isinstance(definition, dict) and safe_text(definition.get("key"))
+    )
     normalized = {}
     for group in DISPLAY_FIELD_GROUPS:
-        raw_fields = config.get(group, [])
+        # Older clients have no wordListFields; keep their saves compatible.
+        raw_fields = config.get(group, default_display_config(library)[group] if group == "wordListFields" else [])
         if not isinstance(raw_fields, list):
             raise HTTPException(status_code=400, detail=f"{group} 必须是字段数组。")
         seen = set()
@@ -355,29 +373,64 @@ def validate_display_config(library: dict, config: dict) -> dict:
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="重点词清单字段上限必须是数字。")
     normalized["focusFieldLimit"] = max(1, min(12, focus_field_limit))
+    normalized["listMode"] = config.get("listMode") if config.get("listMode") in {"browse", "recall"} else "recall"
+    list_layout = config.get("listLayout", "list")
+    if list_layout not in {"list", "tiles"}:
+        raise HTTPException(status_code=400, detail="单词列表布局必须是 list 或 tiles。")
+    normalized["listLayout"] = list_layout
+    normalized["rushMode"] = config.get("rushMode") if config.get("rushMode") in {"browse", "recall"} else "recall"
+    normalized["detailPlacement"] = config.get("detailPlacement") if config.get("detailPlacement") in {"below", "floating"} else "below"
+    normalized["allowMultipleExpanded"] = bool(config.get("allowMultipleExpanded", True))
     return normalized
 
 
 def available_display_fields(library: dict) -> list[dict]:
+    # Keep analysis display choices independent from import-column mapping. The
+    # `present` flag is only a hint for the UI's automatic current-library match.
+    entries = library.get("entries", []) if isinstance(library.get("entries"), list) else []
+    present = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if safe_text(entry.get("meaning")):
+            present.add("meaning")
+        if safe_text(entry.get("unit")):
+            present.add("unit")
+        if entry.get("page") not in (None, ""):
+            present.add("page")
+        if safe_text(entry.get("frequency")) or safe_text(entry.get("frequencyText")):
+            present.add("frequencyText")
+        for source, keys in {
+            "pos": ("pos", "partOfSpeech"),
+            "ipa": ("ipa", "phonetic"),
+            "audioUrl": ("audioUrl", "audio_url"),
+        }.items():
+            if any(safe_text(entry.get(key)) for key in keys):
+                present.add(source)
+        custom_fields = entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {}
+        for name, value in custom_fields.items():
+            if safe_text(value):
+                present.add(f"customFields.{name}")
+
     fields = [
-        {"source": "meaning", "label": "释义"},
-        {"source": "unit", "label": "单元"},
-        {"source": "page", "label": "页码"},
-        {"source": "frequencyText", "label": "频率"},
-        {"source": "libraryName", "label": "词库"},
-        {"source": "lemma", "label": "词形"},
-        {"source": "sourceText", "label": "来源"},
-        {"source": "outsideText", "label": "词库外说明"},
-        {"source": "level", "label": "掌握等级"},
-        {"source": "levelLabel", "label": "掌握等级名称"},
-        {"source": "pos", "label": "词性"},
-        {"source": "ipa", "label": "音标"},
-        {"source": "audioUrl", "label": "音频链接"},
-        {"source": "basicText", "label": "基础词状态"},
-        {"source": "count", "label": "出现次数"},
-        {"source": "fuzzyCount", "label": "模糊次数"},
-        {"source": "unknownCount", "label": "未掌握次数"},
-        {"source": "suggestedLevel", "label": "建议等级"},
+        {"source": "meaning", "label": "释义", "present": "meaning" in present},
+        {"source": "unit", "label": "单元", "present": "unit" in present},
+        {"source": "page", "label": "页码", "present": "page" in present},
+        {"source": "frequencyText", "label": "频率", "present": "frequencyText" in present},
+        {"source": "libraryName", "label": "词库", "present": False},
+        {"source": "lemma", "label": "词形", "present": False},
+        {"source": "sourceText", "label": "来源", "present": False},
+        {"source": "outsideText", "label": "词库外说明", "present": False},
+        {"source": "level", "label": "掌握等级", "present": False},
+        {"source": "levelLabel", "label": "掌握等级名称", "present": False},
+        {"source": "pos", "label": "词性", "present": "pos" in present},
+        {"source": "ipa", "label": "音标", "present": "ipa" in present},
+        {"source": "audioUrl", "label": "音频链接", "present": "audioUrl" in present},
+        {"source": "basicText", "label": "基础词状态", "present": False},
+        {"source": "count", "label": "出现次数", "present": False},
+        {"source": "fuzzyCount", "label": "模糊次数", "present": False},
+        {"source": "unknownCount", "label": "未掌握次数", "present": False},
+        {"source": "suggestedLevel", "label": "建议等级", "present": False},
     ]
     for definition in library.get("fieldDefinitions", []):
         if isinstance(definition, dict):
@@ -385,14 +438,14 @@ def available_display_fields(library: dict) -> list[dict]:
             source = f"customFields.{key}" if key else ""
             label = safe_text(definition.get("label"))
             if source and label and not any(item["source"] == source for item in fields):
-                fields.append({"source": source, "label": label})
+                fields.append({"source": source, "label": label, "present": source in present})
     custom_names = []
     for entry in library.get("entries", []):
         custom_fields = entry.get("customFields") if isinstance(entry.get("customFields"), dict) else {}
         for name in custom_fields:
             if name not in custom_names:
                 custom_names.append(name)
-    fields.extend({"source": f"customFields.{name}", "label": name} for name in custom_names)
+    fields.extend({"source": f"customFields.{name}", "label": name, "present": f"customFields.{name}" in present} for name in custom_names)
     return fields
 
 AI_CHAT_TEXT_EXTENSIONS = {
@@ -1207,6 +1260,10 @@ def entries_from_mapping(headers: list[str], rows: list[list], mapping: dict[str
         if not lemma:
             continue
         known_sources = {index for index in mapped.values() if index is not None}
+        for definition in field_definitions or []:
+            source = safe_text(definition.get("sourceHeader") or definition.get("source")) if isinstance(definition, dict) else ""
+            if source in header_map:
+                known_sources.add(header_map[source])
         fields = {str(header): safe_text(get_cell(row, index)) for index, header in enumerate(headers) if index not in known_sources and safe_text(get_cell(row, index))}
         for field in ("lesson", "pos", "ipa", "audio_url", "serial"):
             value = safe_text(get_cell(row, mapped.get(field)))
@@ -2416,6 +2473,7 @@ def ai_import_draft(request: AIImportDraftRequest):
         "rows": rows,
         "mapping": mapping,
         "mappingFields": [{"key": key, "label": label} for key, label in IMPORT_MAPPING_FIELDS],
+        "availableMappingFields": [{"key": key, "label": label} for key, label in IMPORT_MAPPING_FIELDS],
         "rowCount": len(rows),
         "recognizedCount": len(entries),
         "message": "AI 已生成草稿，请检查映射和内容后再确认导入。",
