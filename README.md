@@ -140,6 +140,8 @@ Windows PowerShell 示例：`$env:AI_API_KEY="你的新密钥"`。macOS/Linux �
 4. 确认远端提交后，创建并推送 `v1.31.0` 标签：`git tag -a v1.31.0 -m "Release v1.31.0"`，再运行 `git -c http.sslBackend=openssl -c http.version=HTTP/1.1 push special-lamp v1.31.0`。
 5. 在 GitHub 仓库的 Releases 页面以该标签创建 Release，上传 `release/desktop/` 的 Setup `.exe` 和 `SHA256SUMS.txt`，并核对附件校验和；安装包保持在 Git 历史之外。
 
+若本地加速器将单次附件上传限制在约 5 MiB，可把安装包按 4 MiB 切为 `setup-v1.31.0.part-000` 起的连续 Release 附件，并从 GitHub Actions 手动运行 `Publish split Windows installer`。该流程先按 `SHA256SUMS.txt` 合并验证，再从 GitHub 运行器上传完整 Setup；确认远端 SHA-256 后才删除临时分片。无需把安装包或分片提交到 Git。
+
 安装版使用 Tauri 提供原生窗口，并自动启动 FastAPI sidecar。sidecar 仅监听本机回环地址 `127.0.0.1:18432`，不会开放局域网服务端口，也不会自动打开浏览器；关闭应用时 Tauri 会终止 sidecar 进程。
 
 ## 开发者运行源码
